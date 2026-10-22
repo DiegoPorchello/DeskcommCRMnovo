@@ -65929,6 +65929,36 @@ create policy channel_sessions_tenant_delete on public.channel_sessions
       and public.fn_role_at_least(organization_id, 'admin'))
     or public.fn_is_platform_admin_full()
   );
+-- ---- uma vez por contato no motor de automação (migration 0731, #2974) ----
+-- manifest: Execuções de automação ganham `contact_id` (uuid, FK para `contacts` com `on delete set null`) e o índice por regra e contato — é o que deixa a opção "no máximo uma vez por contato" (#2974) decidir pelo ESTADO PERSISTIDO, sobrevivendo a reinício do worker.
+--
+-- O motor dispara toda regra que casa em todo evento que casa: o lead que volta
+-- pelo mesmo anúncio recebe a sequência inteira outra vez. Sem o contato na
+-- linha de execução não havia onde contar execuções por contato.
+--
+-- NULLABLE e SEM BACKFILL: as linhas antigas não têm contato a que pertencer, e
+-- NULL é fail-open no motor (a regra segue como sempre foi). `on delete set
+-- null` pelo mesmo motivo de `event_id`: o registro da execução é auditoria e
+-- sobrevive ao expurgo do contato.
+--
+-- O índice responde "esta regra já rodou para este contato?" com
+-- `organization_id` no filtro (doutrina multi-tenant) e é PARCIAL: a linha
+-- antiga sem contato não entra nele.
+--
+-- Não cria função, então pode ficar depois da VARREDURA anon.
+
+alter table public.automation_rule_runs
+  add column if not exists contact_id uuid references public.contacts(id) on delete set null;
+
+create index if not exists idx_automation_rule_runs_org_regra_contato
+  on public.automation_rule_runs (organization_id, rule_id, contact_id)
+  where contact_id is not null;
+
+comment on column public.automation_rule_runs.contact_id is
+  'Contato desta execução, quando o evento deixou resolvê-lo. NULL = não resolvível (linha anterior a esta migration, ou evento sem contato) e NULL é fail-open para a opção "no máximo uma vez por contato" (#2974). on delete set null: o registro da execução sobrevive ao expurgo do contato.';
+
+notify pgrst, 'reload schema';
+
 
 -- ---- respostas rápidas: mostrar na barra do Inbox (migration 0742) ----
 -- manifest: Respostas rápidas — coluna `mostrar_na_barra` (boolean not null default true) em `message_templates` (#3282): cada resposta rápida escolhe se aparece na barra do Inbox, sem sair do atalho `/`. O default TRUE não muda quem já usa (ausência = aparece); `add column if not exists`, idempotente; apêndice idempotente no `baseline.sql`.

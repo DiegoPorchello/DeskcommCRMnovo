@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AUTOMATION_CONSUMER_KEY, runAutomationForEvent } from "@/lib/automation/engine";
 import { registerAction } from "@/lib/automation/actions";
 import type { EventRow } from "@/lib/event-log/dispatcher";
-import { GOV_LEAD, GOV_ORG, seedGov, sql, lastLine } from "./gov-helpers";
+import { GOV_CONTACT_2, GOV_CONTACT_3, GOV_LEAD, GOV_ORG, GOV_PIPELINE, GOV_STAGE, seedGov, sql, lastLine } from "./gov-helpers";
 
 /**
  * Task 8 (spec webhooks/automação 2026-07-17) — engine do motor de regras.
@@ -44,6 +44,7 @@ class FakeQuery implements PromiseLike<QResult> {
   private filters: Array<{ col: string; val: unknown }> = [];
   private orderCol?: string;
   private orderAsc = true;
+  private limitN?: number;
 
   constructor(private table: string) {}
 
@@ -80,6 +81,18 @@ class FakeQuery implements PromiseLike<QResult> {
     return this;
   }
 
+  /**
+   * `limit` entrou com o #2974: a conferência "esta regra já rodou para este
+   * contato?" usa `.limit(1)` com LISTA (nunca `maybeSingle()`, que erra quando
+   * há mais de uma linha). Sem traduzir o `limit` aqui, o harness devolveria
+   * todas as linhas e o caso mediria outra coisa.
+   */
+  limit(n: number): this {
+    if (this.mode !== "select") throw new Error("limit() só é usado em select neste harness");
+    this.limitN = n;
+    return this;
+  }
+
   async maybeSingle(): Promise<QResult> {
     const { data, error } = await this.execute();
     if (error) return { data: null, error };
@@ -97,6 +110,7 @@ class FakeQuery implements PromiseLike<QResult> {
     if (this.mode === "select") {
       let q = `select ${this.selectCols} from public.${this.table}${this.where()}`;
       if (this.orderCol) q += ` order by ${this.orderCol} ${this.orderAsc ? "asc" : "desc"}`;
+      if (this.limitN !== undefined) q += ` limit ${this.limitN}`;
       return q;
     }
     if (this.mode === "insert") {
@@ -164,9 +178,11 @@ function runsCount(): number {
   return Number(lastLine(sql(`select count(*) from public.automation_rule_runs;`)));
 }
 
-function runsForRule(ruleId: string): Array<{ status: string; actions_result: Array<{ type: string; status: string; error?: string }> }> {
+function runsForRule(
+  ruleId: string,
+): Array<{ status: string; contact_id: string | null; actions_result: Array<{ type: string; status: string; error?: string }> }> {
   const out = sql(
-    `select coalesce(json_agg(t), '[]') from (select status, actions_result from public.automation_rule_runs where rule_id = ${sqlString(ruleId)} order by created_at) t;`,
+    `select coalesce(json_agg(t), '[]') from (select status, contact_id, actions_result from public.automation_rule_runs where rule_id = ${sqlString(ruleId)} order by created_at) t;`,
   );
   return JSON.parse(out || "[]");
 }
@@ -189,8 +205,22 @@ const R3 = "dddddddd-1111-4000-8000-000000000003";
 const R4 = "dddddddd-1111-4000-8000-000000000004";
 const R5 = "dddddddd-1111-4000-8000-000000000005";
 const R6 = "dddddddd-1111-4000-8000-000000000006";
+/** #2974 — a regra "no máximo uma vez por contato". */
+const R7 = "dddddddd-1111-4000-8000-000000000007";
+const TITULO_DO_LIMITE = "Lead do limite por contato";
+const LEAD_LIMITE_A = "dddddddd-6666-4000-8000-000000000001";
+const LEAD_LIMITE_B = "dddddddd-6666-4000-8000-000000000002";
 
 let fakeOkCalls = 0;
+/** Contador PRÓPRIO do #2974: isola a execução de R7 das demais regras do arquivo. */
+let limiteCalls = 0;
+registerAction({
+  type: "fake_ok_uma_vez",
+  async execute() {
+    limiteCalls += 1;
+    return { type: "fake_ok_uma_vez", status: "success" };
+  },
+});
 registerAction({
   type: "fake_ok",
   async execute() {
@@ -235,6 +265,19 @@ beforeAll(() => {
           '[{"type":"fake_postpone"},{"type":"fake_ok"}]'::jsonb, true),
         ('${R6}', '${GOV_ORG}', 'R6', 'lead.tag_added', '[]'::jsonb,
           '[{"type":"nope"}]'::jsonb, true)
+      on conflict do nothing;
+    -- #2974 — R7 roda no MÁXIMO uma vez por contato. A condição de título a
+    -- isola dos outros casos (o lead criado aqui carrega contato; os demais não).
+    insert into public.crm_leads (id, organization_id, pipeline_id, stage_id, title, contact_id)
+      values
+        ('${LEAD_LIMITE_A}', '${GOV_ORG}', '${GOV_PIPELINE}', '${GOV_STAGE}', '${TITULO_DO_LIMITE}', '${GOV_CONTACT_2}'),
+        ('${LEAD_LIMITE_B}', '${GOV_ORG}', '${GOV_PIPELINE}', '${GOV_STAGE}', '${TITULO_DO_LIMITE}', '${GOV_CONTACT_3}')
+      on conflict do nothing;
+    insert into public.automation_rules (id, organization_id, name, trigger_event, conditions, actions, is_active, trigger_config)
+      values ('${R7}', '${GOV_ORG}', 'R7 (uma vez por contato)', 'lead.created',
+        '[{"field":"lead.title","op":"eq","value":"${TITULO_DO_LIMITE}"}]'::jsonb,
+        '[{"type":"fake_ok_uma_vez"}]'::jsonb, true,
+        '{"uma_vez_por_contato":true}'::jsonb)
       on conflict do nothing;
   `);
 });
@@ -356,5 +399,70 @@ describe("runAutomationForEvent — motor de regras (Task 8)", () => {
     const result = await runAutomationForEvent(fakeAdminClient(), row);
     expect(result).toEqual({ consumer_key: AUTOMATION_CONSUMER_KEY, status: "skipped", detail: "entity_kind_mismatch" });
     expect(runsCount()).toBe(before);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // #2974 — "NO MÁXIMO UMA VEZ POR CONTATO", medido contra o banco de verdade.
+  //
+  // O teste de unidade (lib/automation/limite-por-contato-no-motor.test.ts) usa
+  // um dublê. Aqui a decisão passa pelo Postgres: a coluna `contact_id` existe
+  // (é a migration 0731), a FK para `contacts` vale, e a segunda passagem do
+  // contato encontra a LINHA que a primeira gravou — o estado persistido, não
+  // memória de processo.
+  // ═══════════════════════════════════════════════════════════════════════════
+  it("⭐ o mesmo contato roda R7 uma vez; a segunda passagem fica registrada com a razão e não executa", async () => {
+    const okAntes = limiteCalls;
+    const eventA = emitRealEvent("lead.created", "crm_lead", LEAD_LIMITE_A);
+    const primeira = await runAutomationForEvent(
+      fakeAdminClient(),
+      baseRow({ id: eventA, event_type: "lead.created", entity_kind: "crm_lead", entity_id: LEAD_LIMITE_A }),
+    );
+    expect(primeira.status).toBe("ok");
+    expect(limiteCalls, "a primeira mensagem do contato não executou R7").toBe(okAntes + 1);
+
+    const depoisDaPrimeira = runsForRule(R7);
+    expect(depoisDaPrimeira.length).toBe(1);
+    expect(depoisDaPrimeira[0]!.contact_id).toBe(GOV_CONTACT_2);
+    expect(depoisDaPrimeira[0]!.status).toBe("success");
+
+    const eventB = emitRealEvent("lead.created", "crm_lead", LEAD_LIMITE_A);
+    const segunda = await runAutomationForEvent(
+      fakeAdminClient(),
+      baseRow({ id: eventB, event_type: "lead.created", entity_kind: "crm_lead", entity_id: LEAD_LIMITE_A }),
+    );
+
+    // O evento não vira "nada aconteceu": a decisão fica na tabela (a asserção
+    // abaixo), e é ela que a aba Atividade mostra. O `detail: uma_vez_por_contato`
+    // do retorno só aparece quando NENHUMA regra roda no evento — aqui o R1 (que
+    // casa todo lead.created) roda junto, então o retorno é o `ok` de sempre.
+    // Quem mede o `detail` é o teste de unidade do motor.
+    expect(segunda.status).toBe("ok");
+    expect(limiteCalls, "a segunda mensagem do mesmo contato executou a ação").toBe(okAntes + 1);
+
+    const runs = runsForRule(R7);
+    expect(runs.length).toBe(2);
+    const bloqueio = runs[1]!;
+    expect(bloqueio.contact_id).toBe(GOV_CONTACT_2);
+    expect(bloqueio.status).toBe("failed");
+    expect(bloqueio.actions_result).toEqual([
+      { type: "fake_ok_uma_vez", status: "skipped", error: "uma_vez_por_contato" },
+    ]);
+  });
+
+  it("⭐ um contato DIFERENTE continua rodando — o limite é por contato, não pela regra", async () => {
+    const okAntes = limiteCalls;
+    const eventId = emitRealEvent("lead.created", "crm_lead", LEAD_LIMITE_B);
+    const result = await runAutomationForEvent(
+      fakeAdminClient(),
+      baseRow({ id: eventId, event_type: "lead.created", entity_kind: "crm_lead", entity_id: LEAD_LIMITE_B }),
+    );
+
+    expect(result.status).toBe("ok");
+    expect(limiteCalls, "o contato B não executou R7").toBe(okAntes + 1);
+
+    const runs = runsForRule(R7);
+    const ultima = runs[runs.length - 1]!;
+    expect(ultima.contact_id).toBe(GOV_CONTACT_3);
+    expect(ultima.status).toBe("success");
   });
 });
