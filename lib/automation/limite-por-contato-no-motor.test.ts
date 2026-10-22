@@ -18,11 +18,17 @@
  *      `contact_id`, e não memória do processo — o mesmo motivo faz uma linha
  *      de OUTRO contato não barrar ninguém;
  *   5. FAIL-OPEN quando o evento não tem contato resolvível: a regra segue como
- *      sempre, com `contact_id` nulo na linha.
+ *      sempre, com `contact_id` nulo na linha;
+ *   6. ⭐ DOIS DRENOS ao mesmo tempo — a corrida do ponto 1 do CR: a reserva da
+ *      chave `(regra, contato)` é tomada ANTES de executar, então quem chega
+ *      depois não executa e só registra o bloqueio. Sem ela, os dois drenos
+ *      leem "nunca rodou" e a sequência sai duas vezes.
  *
  * O banco é um dublê mínimo (`from().select()/insert()/update()`, `eq`,
- * `order`, `limit`, `maybeSingle`) que GUARDA o que o motor grava — é assim que
- * a segunda passagem encontra o que a primeira deixou.
+ * `order`, `limit`, `maybeSingle`, e o `onConflict`/`ignoreDuplicates` do
+ * `insert`) que GUARDA o que o motor grava e RESPEITA a chave única da reserva —
+ * é assim que a segunda passagem encontra o que a primeira deixou, e que o
+ * segundo dreno perde a corrida.
  *
  *     pnpm vitest run lib/automation/limite-por-contato-no-motor.test.ts
  */
@@ -51,6 +57,60 @@ registerAction({
   },
 });
 
+/**
+ * A AÇÃO DA CORRIDA (#2974): a mesma coisa, mas PARADA na barreira.
+ *
+ * O contador é próprio e o tipo é próprio para o caso da corrida não medir as
+ * outras regras do arquivo, nem as outras medirem ele.
+ */
+let execucoesDaCorrida = 0;
+let barreiraDaCorrida: (() => Promise<void>) | null = null;
+registerAction({
+  type: "acao_da_corrida",
+  async execute() {
+    execucoesDaCorrida += 1;
+    if (barreiraDaCorrida) await barreiraDaCorrida();
+    return { type: "acao_da_corrida", status: "success" };
+  },
+});
+
+/**
+ * A BARREIRA QUE FORÇA A CORRIDA — sem ela o teste mediria o escalonador do Node.
+ *
+ * O dreno que entra na ação fica PARADO até que (a) o SEGUNDO dreno também
+ * entre na ação, ou (b) algum dos dois termine. As duas saídas são o que
+ * separa os dois desenhos:
+ *
+ *   - com a reserva ANTES das ações, o segundo dreno NÃO executa: ele perde a
+ *     chave, registra o bloqueio e TERMINA — e é a saída (b) que libera o
+ *     primeiro. Uma execução só;
+ *   - sem ela, o segundo dreno chega à ação igual ao primeiro — saída (a) — e os
+ *     dois executam. É exatamente o vermelho que a sabotagem tem de produzir.
+ *
+ * Quem avisa o fim são OS DOIS drenos (não só o segundo): o vencedor da chave
+ * pode ser qualquer um deles, e um aviso preso ao perdedor deixaria o teste
+ * pendurado no caso em que o vencedor é o outro.
+ */
+function barreiraDeDoisDrenos() {
+  let entradas = 0;
+  let avisarEntrada!: () => void;
+  let avisarFim!: () => void;
+  const entradaDaSegunda = new Promise<void>((resolve) => {
+    avisarEntrada = resolve;
+  });
+  const fimDeAlgum = new Promise<void>((resolve) => {
+    avisarFim = resolve;
+  });
+  return {
+    async entrarNaAcao() {
+      entradas += 1;
+      if (entradas >= 2) avisarEntrada();
+      await Promise.race([entradaDaSegunda, fimDeAlgum]);
+    },
+    avisarQueODrenoTerminou: () => avisarFim(),
+  };
+}
+
 type Linha = Record<string, unknown>;
 
 function bancoFalso(tabelas: Record<string, Linha[]>) {
@@ -59,10 +119,24 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
     let limite: number | null = null;
     let inserindo: Linha | null = null;
     let atualizando: Linha | null = null;
+    /**
+     * A CHAVE ÚNICA do `insert`, como o PostgREST a manda (#2974).
+     *
+     * `onConflict` + `ignoreDuplicates` viram `on conflict (…) do nothing`: a
+     * linha que já existe NÃO é gravada e o insert devolve LISTA VAZIA em vez de
+     * erro. Sem traduzir isso aqui, o dublê aceitaria a segunda reserva da mesma
+     * chave e o caso da corrida mediria o contrário do que promete.
+     */
+    let chaveUnica: string[] | null = null;
+    let ignorarDuplicada = false;
     const guardadas = () => tabelas[tabela] ?? [];
     const casadas = () => guardadas().filter((l) => filtros.every(([c, v]) => l[c] === v));
     async function executar() {
       if (inserindo) {
+        const jaExiste =
+          chaveUnica !== null &&
+          guardadas().some((l) => chaveUnica!.every((c) => l[c] === inserindo![c]));
+        if (jaExiste && ignorarDuplicada) return { data: [], error: null };
         const linha = { id: `run-${guardadas().length + 1}`, ...inserindo };
         (tabelas[tabela] ??= []).push(linha);
         return { data: [linha], error: null };
@@ -76,10 +150,18 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
     }
     const q = {
       select: () => q,
-      insert: (linha: Linha) => {
+      insert: (linha: Linha, opcoes?: { onConflict?: string; ignoreDuplicates?: boolean }) => {
         inserindo = linha;
+        chaveUnica = opcoes?.onConflict
+          ? opcoes.onConflict.split(",").map((c) => c.trim())
+          : null;
+        ignorarDuplicada = opcoes?.ignoreDuplicates === true;
         return q;
       },
+      // O motor reserva a chave com `.upsert(…, { ignoreDuplicates: true })`: no
+      // fio é o mesmo `on conflict (…) do nothing`, então o dublê trata igual.
+      upsert: (linha: Linha, opcoes?: { onConflict?: string; ignoreDuplicates?: boolean }) =>
+        q.insert(linha, { ignoreDuplicates: true, ...opcoes }),
       update: (linha: Linha) => {
         atualizando = linha;
         return q;
@@ -105,7 +187,7 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
   return { cliente: { from: consulta } as unknown as SupabaseClient, tabelas };
 }
 
-function regra(triggerConfig: Record<string, unknown>): Linha {
+function regra(triggerConfig: Record<string, unknown>, tipoDeAcao = "call_webhook"): Linha {
   return {
     id: REGRA,
     organization_id: ORG,
@@ -113,15 +195,19 @@ function regra(triggerConfig: Record<string, unknown>): Linha {
     is_active: true,
     name: "Boas-vindas ao contato novo",
     conditions: [],
-    actions: [{ type: "call_webhook", config: { url: "https://exemplo.test/hook" } }],
+    actions: [{ type: tipoDeAcao, config: { url: "https://exemplo.test/hook" } }],
     trigger_config: triggerConfig,
   };
 }
 
 /** O mundo com um lead POR contato (o contato chega pelo lead, não pelo payload). */
-function mundo(triggerConfig: Record<string, unknown>, comContato: boolean) {
+function mundo(
+  triggerConfig: Record<string, unknown>,
+  comContato: boolean,
+  tipoDeAcao = "call_webhook",
+) {
   return bancoFalso({
-    automation_rules: [regra(triggerConfig)],
+    automation_rules: [regra(triggerConfig, tipoDeAcao)],
     crm_leads: [
       { id: LEAD_A, organization_id: ORG, contact_id: comContato ? CONTATO_A : null },
       { id: LEAD_B, organization_id: ORG, contact_id: comContato ? CONTATO_B : null },
@@ -158,6 +244,8 @@ function linhasDeExecucao(tabelas: Record<string, Linha[]>, contactId?: string):
 
 beforeEach(() => {
   regrasQueRodaram.length = 0;
+  execucoesDaCorrida = 0;
+  barreiraDaCorrida = null;
   evento = 0;
 });
 
@@ -323,5 +411,70 @@ describe("FAIL-OPEN quando o evento não tem contato resolvível", () => {
     await runAutomationForEvent(cliente, comContatoNoPayload(LEAD_A));
 
     expect(regrasQueRodaram).toEqual([REGRA]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// A CORRIDA DOS DOIS EVENTOS (o ponto 1 do CR) — medido, não argumentado.
+//
+// O motor consulta, executa as ações e só DEPOIS grava a linha do run. O laço do
+// worker e o cron drenam o `event_log` em paralelo (e numa instalação sem worker
+// o dreno roda dentro da própria requisição de captação): dois `lead.created` do
+// MESMO contato chegam aos dois drenos ao mesmo tempo, os dois leem "nunca
+// rodou", os dois executam. Cada um roda UMA regra — o defeito não está em
+// nenhuma das execuções, está entre elas.
+//
+// Os dois casos abaixo rodam os DOIS drenos em `Promise.all`, com a ação presa na
+// barreira: é o mesmo desenho da sonda do mantenedor (duas chamadas concorrentes),
+// com a diferença de que aqui a ordem não fica por conta do escalonador.
+// ═══════════════════════════════════════════════════════════════════════════════
+describe("DOIS DRENOS concorrentes do mesmo (regra, contato)", () => {
+  it("⭐ a ação roda UMA vez — o segundo dreno perde a reserva e só registra o bloqueio", async () => {
+    const { cliente, tabelas } = mundo({ uma_vez_por_contato: true }, true, "acao_da_corrida");
+    const barreira = barreiraDeDoisDrenos();
+    barreiraDaCorrida = barreira.entrarNaAcao;
+
+    const dreno = (leadId: string) =>
+      runAutomationForEvent(cliente, leadCreated(leadId)).then((resultado) => {
+        barreira.avisarQueODrenoTerminou();
+        return resultado;
+      });
+    const [um, dois] = await Promise.all([dreno(LEAD_A), dreno(LEAD_A)]);
+
+    // O CRITÉRIO: a ação executou UMA vez, ainda que os dois drenos tenham
+    // passado pela leitura antes de qualquer gravação.
+    expect(execucoesDaCorrida, "os dois drenos executaram a ação da mesma regra").toBe(1);
+    expect(regrasQueRodaram, "a ação de outra regra não devia ter rodado").toEqual([]);
+
+    // A chave ficou com UM dreno, e é a linha da reserva que diz qual.
+    const reservas = tabelas.automation_rule_contact_claims!;
+    expect(reservas.length).toBe(1);
+    expect(reservas[0]!.rule_id).toBe(REGRA);
+    expect(reservas[0]!.contact_id).toBe(CONTATO_A);
+    expect(reservas[0]!.organization_id).toBe(ORG);
+
+    // Um dreno executou, o outro foi barrado — e o barrado não é silêncio: ele
+    // devolve `uma_vez_por_contato` e deixa a linha do bloqueio na Atividade.
+    const devolveram = [um.detail, dois.detail].filter((d) => d === "uma_vez_por_contato");
+    expect(devolveram.length, "nenhum dos dois drenos se declarou barrado").toBe(1);
+
+    const linhas = linhasDeExecucao(tabelas, CONTATO_A);
+    expect(linhas.length).toBe(2);
+    expect(linhas.map((l) => l.status).sort()).toEqual(["failed", "success"]);
+    const bloqueio = linhas.find((l) => l.status === "failed")!;
+    expect(bloqueio.actions_result).toEqual([
+      { type: "acao_da_corrida", status: "skipped", error: "uma_vez_por_contato" },
+    ]);
+  });
+
+  it("um dreno sozinho continua executando e reservando (a guarda não trava o caso comum)", async () => {
+    const { cliente, tabelas } = mundo({ uma_vez_por_contato: true }, true, "acao_da_corrida");
+
+    const resultado = await runAutomationForEvent(cliente, leadCreated(LEAD_A));
+
+    expect(resultado.status).toBe("ok");
+    expect(execucoesDaCorrida).toBe(1);
+    expect(tabelas.automation_rule_contact_claims!.length).toBe(1);
+    expect(linhasDeExecucao(tabelas, CONTATO_A).map((l) => l.status)).toEqual(["success"]);
   });
 });

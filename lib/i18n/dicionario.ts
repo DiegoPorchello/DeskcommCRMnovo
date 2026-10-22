@@ -125,8 +125,8 @@ export const DICIONARIO: Traducoes = {
   // automação, a recusa do schema (que a gaveta mostra em toast) e a frase que
   // a aba Atividade usa para a decisão de pular o contato.
   "Rodar no máximo uma vez por contato": { es: "Ejecutar como máximo una vez por contacto" },
-  "Ligado, esta automação roda uma única vez para cada contato: se ele voltar pelo mesmo anúncio, a sequência não repete. A execução fica registrada no contato e a próxima mensagem dele só registra que a regra foi pulada.": {
-    es: "Activado, esta automatización se ejecuta una sola vez por contacto: si vuelve por el mismo anuncio, la secuencia no se repite. La ejecución queda registrada en el contacto y el próximo mensaje suyo solo registra que se omitió la regla.",
+  "Ligado, esta automação roda uma única vez para cada contato: se ele voltar pelo mesmo anúncio, a sequência não repete. A execução fica registrada na aba Atividade, e a próxima entrada deste contato só registra que a regra foi pulada.": {
+    es: "Activado, esta automatización se ejecuta una sola vez por contacto: si vuelve por el mismo anuncio, la secuencia no se repite. La ejecución queda registrada en la pestaña Actividad, y la próxima entrada de este contacto solo registra que se omitió la regla.",
   },
   "A opção “uma vez por contato” só aceita ligado ou desligado.": {
     es: "La opción “una vez por contacto” solo acepta activado o desactivado.",

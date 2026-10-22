@@ -255,6 +255,13 @@ function contatoDoContexto(context: Record<string, unknown>): string | null {
  * FAIL-OPEN na leitura: se a consulta falhar, a regra roda como sempre rodou.
  * Negar por erro de leitura esconderia automação legítima sem deixar rastro do
  * porquê; o erro sai no log.
+ *
+ * Ela é o CAMINHO RÁPIDO, não o árbitro da corrida: o caso comum é o contato que
+ * JÁ executou, e aí a regra morre aqui, sem tocar no banco de novo. Quem decide a
+ * corrida entre dois drenos simultâneos é a RESERVA
+ * (`reservarExecucaoPorContato`), tomada depois das condições e antes de
+ * executar — consultar e depois executar são dois passos, e entre eles cabia
+ * outro dreno.
  */
 async function regraJaRodouParaOCntato(
   admin: SupabaseClient,
@@ -282,6 +289,63 @@ async function regraJaRodouParaOCntato(
     return false;
   }
   return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * A RESERVA NO BANCO — a chave (regra, contato) tomada ANTES de executar (#2974).
+ *
+ * A leitura acima é o CAMINHO RÁPIDO, e não o árbitro: ela responde "esta regra
+ * já rodou para este contato?" sobre o estado que EXISTE, e o caso comum (o
+ * contato que já executou) morre ali, sem chegar aqui. O que ela não faz é
+ * RESERVAR: consultar e depois executar são dois passos, e entre eles cabe
+ * outro dreno. O laço do worker e o cron drenam o `event_log` em paralelo e,
+ * numa instalação sem worker, o dreno roda dentro da própria requisição de
+ * captação — dois `lead.created` do MESMO contato (o "reenviou porque demorou"
+ * da issue) chegam aos dois drenos ao mesmo tempo, os dois leem "nunca rodou",
+ * os dois executam, e a sequência sai duas vezes.
+ *
+ * Aqui a decisão é ATÔMICA: `insert ... on conflict do nothing` sobre a chave
+ * única `(organization_id, rule_id, contact_id)` — que é o que
+ * `.upsert(…, { ignoreDuplicates: true })` manda no fio (`on_conflict=` +
+ * `resolution=ignore-duplicates`). Quem consegue o insert
+ * executa; quem não consegue não executa e só registra o bloqueio. Não há
+ * janela entre decidir e executar, porque a decisão É a escrita.
+ *
+ * FAIL-OPEN no erro que NÃO é a chave tomada (banco fora do ar, por exemplo):
+ * negar por erro de escrita esconderia automação legítima sem deixar rastro do
+ * porquê — a mesma doutrina da leitura acima, e o log diz que foi isso. A chave
+ * já tomada NÃO é erro: com `ignoreDuplicates` o PostgREST responde 201 com
+ * lista vazia, e é por aí que "não reservei" chega.
+ */
+async function reservarExecucaoPorContato(
+  admin: SupabaseClient,
+  row: EventRow,
+  rule: RuleRow,
+  contactId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("automation_rule_contact_claims")
+    .upsert(
+      {
+        organization_id: row.organization_id,
+        rule_id: rule.id,
+        contact_id: contactId,
+        event_id: row.id,
+      },
+      { onConflict: "organization_id,rule_id,contact_id", ignoreDuplicates: true },
+    )
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    logger.warn(
+      "[automation.engine] não foi possível reservar a execução única do contato — a regra segue (fail-open)",
+      { rule_id: rule.id, organization_id: row.organization_id, error: error.message },
+    );
+    return true;
+  }
+  // Lista vazia = a chave já era de outro dreno (foi `on conflict do nothing`),
+  // e o `maybeSingle` traduz isso em `data` nulo. Ninguém executa duas vezes.
+  return data !== null;
 }
 
 /**
@@ -535,7 +599,45 @@ export async function runAutomationForEvent(
     }
   }
 
-  for (const rule of applicable) {
+  // ═══ A RESERVA ANTES DE EXECUTAR (#2974) ═══
+  //
+  // A pré-checagem de adiamento acima vem ANTES de propósito: o adiamento devolve
+  // o evento para a hora marcada (`retry_at`), e reservar antes disso consumiria
+  // a única execução do contato sem nada ter saído — a regra esperaria a janela
+  // e, quando ela reabrisse, encontraria a própria reserva e não rodaria nunca.
+  //
+  // Daqui para baixo a chave (regra, contato) está tomada, e o SEGUNDO dreno do
+  // mesmo contato não executa: ele registra o bloqueio e o evento segue sem nada
+  // sair. Sem contato resolvível não há chave a tomar, e aí não há o que reservar
+  // (fail-open já declarado no filtro acima).
+  const barradasPelaReserva: RuleRow[] = [];
+  if (contatoIdDoEvento) {
+    for (const rule of applicable) {
+      if (!regraRodaUmaVezPorContato(rule)) continue;
+      if (!(await reservarExecucaoPorContato(admin, row, rule, contatoIdDoEvento))) {
+        barradasPelaReserva.push(rule);
+      }
+    }
+    for (const rule of barradasPelaReserva) {
+      await registrarBloqueioPorLimite(admin, row, rule, contatoIdDoEvento);
+    }
+  }
+
+  const paraExecutar = applicable.filter((rule) => !barradasPelaReserva.includes(rule));
+  if (!paraExecutar.length) {
+    // Toda regra que casou perdeu a corrida pela chave do contato. O desfecho é o
+    // MESMO do bloqueio decidido na leitura (`detail: uma_vez_por_contato`) — a
+    // diferença é só onde a corrida foi decidida: lá, sobre o estado gravado;
+    // aqui, no próprio insert. O que a Atividade mostra são as linhas de bloqueio
+    // gravadas acima.
+    return {
+      consumer_key: AUTOMATION_CONSUMER_KEY,
+      status: "ok",
+      detail: "uma_vez_por_contato",
+    };
+  }
+
+  for (const rule of paraExecutar) {
     const results: ActionResultDetail[] = [];
     // O índice é o da lista INTEIRA — a posição do resultado em
     // `actions_result` e parte do id da entrega do webhook (#1529).

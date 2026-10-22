@@ -589,7 +589,7 @@ export function RuleEditor({ open, onOpenChange, rule }: Props) {
                   {t("Rodar no máximo uma vez por contato")}
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  {t("Ligado, esta automação roda uma única vez para cada contato: se ele voltar pelo mesmo anúncio, a sequência não repete. A execução fica registrada no contato e a próxima mensagem dele só registra que a regra foi pulada.")}
+                  {t("Ligado, esta automação roda uma única vez para cada contato: se ele voltar pelo mesmo anúncio, a sequência não repete. A execução fica registrada na aba Atividade, e a próxima entrada deste contato só registra que a regra foi pulada.")}
                 </p>
               </div>
             ) : null}

@@ -41,6 +41,17 @@ class FakeQuery implements PromiseLike<QResult> {
   private selectCols = "*";
   private selectAfterMutation = false;
   private mutationData: Record<string, unknown> | null = null;
+  /**
+   * A chave única do `insert`/`upsert` (#2974).
+   *
+   * O motor reserva a chave `(regra, contato)` com
+   * `.upsert(…, { onConflict, ignoreDuplicates: true })`, que no fio é
+   * `insert … on conflict (<colunas>) do nothing` + `resolution=ignore-duplicates`.
+   * Sem traduzir as opções aqui, o harness mandaria um `insert` CRU: a chave
+   * repetida viraria violação de unicidade (erro) em vez de lista vazia, e o
+   * caminho que o motor mede com `data === null` nunca seria exercido.
+   */
+  private insertOpts: { onConflict?: string; ignoreDuplicates?: boolean } | null = null;
   private filters: Array<{ col: string; val: unknown }> = [];
   private orderCol?: string;
   private orderAsc = true;
@@ -58,9 +69,22 @@ class FakeQuery implements PromiseLike<QResult> {
     return this;
   }
 
-  insert(data: Record<string, unknown>): this {
+  insert(data: Record<string, unknown>, opts?: { onConflict?: string; ignoreDuplicates?: boolean }): this {
     this.mode = "insert";
     this.mutationData = data;
+    this.insertOpts = opts ?? null;
+    return this;
+  }
+
+  /**
+   * `upsert(…, { ignoreDuplicates: true })` é o mesmo `on conflict do nothing` do
+   * insert — aqui os dois caem no mesmo caminho de propósito, porque é o mesmo
+   * SQL que o PostgREST monta.
+   */
+  upsert(data: Record<string, unknown>, opts?: { onConflict?: string; ignoreDuplicates?: boolean }): this {
+    this.mode = "insert";
+    this.mutationData = data;
+    this.insertOpts = { ignoreDuplicates: true, ...opts };
     return this;
   }
 
@@ -116,7 +140,13 @@ class FakeQuery implements PromiseLike<QResult> {
     if (this.mode === "insert") {
       const cols = Object.keys(this.mutationData!);
       const vals = cols.map((c) => sqlLiteral(this.mutationData![c]));
-      return `insert into public.${this.table} (${cols.join(", ")}) values (${vals.join(", ")})`;
+      const corpo = `insert into public.${this.table} (${cols.join(", ")}) values (${vals.join(", ")})`;
+      // `on conflict (…) do nothing` é o que o motor manda para RESERVAR a chave
+      // (regra, contato); sem ele o insert cru estoura unicidade na repetição.
+      const opts = this.insertOpts;
+      return opts?.ignoreDuplicates && opts.onConflict
+        ? `${corpo} on conflict (${opts.onConflict}) do nothing`
+        : corpo;
     }
     const setClauses = Object.entries(this.mutationData!)
       .map(([k, v]) => `${k} = ${sqlLiteral(v)}`)
@@ -464,5 +494,51 @@ describe("runAutomationForEvent — motor de regras (Task 8)", () => {
     const ultima = runs[runs.length - 1]!;
     expect(ultima.contact_id).toBe(GOV_CONTACT_3);
     expect(ultima.status).toBe("success");
+  });
+
+  /**
+   * ⭐ O ÁRBITRO DA CORRIDA, medido no BANCO e não no motor.
+   *
+   * Duas chamadas do motor NÃO conseguem correr de verdade neste harness: o
+   * `sql()` é `execFileSync`, então cada consulta bloqueia o laço de eventos e as
+   * duas passariam uma DEPOIS da outra — um caso verde que não mede corrida
+   * nenhuma. O que se mede aqui é a peça que faz a corrida ter um vencedor: a
+   * chave única e o `on conflict … do nothing` com que o motor a toma. É o
+   * SQL exato que o PostgREST monta para
+   * `.upsert(…, { onConflict, ignoreDuplicates: true })`.
+   *
+   * Sem o índice único este caso fica VERMELHO na segunda reserva (duas linhas, e
+   * o motor executaria duas vezes): é por isso que ele é invariante, e não
+   * comentário.
+   */
+  it("⭐ a reserva da chave (regra, contato) é única no banco: a segunda tentativa não grava", () => {
+    // R1 não tem a opção ligada, então o motor NUNCA reserva por ela: usar R1 aqui
+    // deixa o caso sem ordem — nenhum outro teste deste arquivo disputa esta chave.
+    const reservar = () =>
+      Number(
+        lastLine(
+          sql(`
+            with w as (
+              insert into public.automation_rule_contact_claims (organization_id, rule_id, contact_id)
+              values (${sqlString(GOV_ORG)}, ${sqlString(R1)}, ${sqlString(GOV_CONTACT_2)})
+              on conflict (organization_id, rule_id, contact_id) do nothing
+              returning id
+            ) select count(*) from w;
+          `),
+        ),
+      );
+
+    expect(reservar(), "a primeira reserva não gravou a chave").toBe(1);
+    expect(reservar(), "a segunda reserva da MESMA chave gravou — não há árbitro").toBe(0);
+    expect(
+      Number(
+        lastLine(
+          sql(
+            `select count(*) from public.automation_rule_contact_claims where rule_id = ${sqlString(R1)};`,
+          ),
+        ),
+      ),
+      "a chave existe mais de uma vez para a mesma (regra, contato)",
+    ).toBe(1);
   });
 });
