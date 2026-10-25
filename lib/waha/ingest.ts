@@ -15,6 +15,7 @@ import { lancarFalhaDeIngestao } from "@/lib/waha/falha-transitoria";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { audit } from "@/lib/audit";
+import { descartarSessaoQueNuncaPareou } from "@/lib/channels/descartar-sem-parear";
 import { sincronizarSaudeDaConexao } from "@/lib/channels/health";
 import { marcarConversaComMensagem } from "@/lib/channels/marcar-conversa";
 import { gravarReacaoDeMensagem } from "@/lib/channels/reacao";
@@ -2008,6 +2009,56 @@ async function handleSessionStatus(
   if (!allowed.has(status)) return;
   const now = new Date().toISOString();
 
+  // ─── ANTES de gravar: esta queda é de um NÚMERO ou de um QR? (#3416) ──────
+  //
+  // A leitura já existia, mas vinha depois do UPDATE e servia só para o apelido.
+  // Ela é que decide os dois ramos novos: sem `phone_number`, o `FAILED` não é
+  // conexão fora do ar — é o código expirando na tela de quem nunca pareou, e a
+  // linha não deve virar uma sessão `FAILED` que ocupa o número do plano, puxa
+  // a faixa vermelha "WhatsApp sem nome" e abre crítico na Central.
+  //
+  // `null` SÓ quando a leitura veio e a coluna estava vazia. Leitura falhada ou
+  // coluna fora do select → `undefined` → nada muda aqui: sem descarte, e o
+  // aviso de sempre (quem não sabe o número não silencia conexão nenhuma).
+  const { data: linha, error: erroDaLeitura } = await admin
+    .from("channel_sessions")
+    .select("display_name, phone_number")
+    .eq("id", session.id)
+    .maybeSingle();
+  const numero =
+    erroDaLeitura || !linha || !("phone_number" in linha)
+      ? undefined
+      : (linha.phone_number as string | null);
+  const apelido =
+    (linha?.display_name as string | null | undefined) ??
+    (linha?.phone_number as string | null | undefined) ??
+    "sem nome";
+
+  if (numero === null && status === "FAILED") {
+    // O QR expirou sem parear. Arquivar em vez de gravar: a linha sai do
+    // contador do plano, sai da faixa, não vira `FAILED` na tela — e o descarte
+    // fecha o episódio que a própria sessão pode ter aberto.
+    //
+    // Só `FAILED` (a expiração medida na #3416). `STOPPED` continua sendo o de
+    // sempre: parar é decisão de quem opera, não fim de QR.
+    const desfecho = await descartarSessaoQueNuncaPareou(admin, {
+      id: session.id,
+      organization_id: session.organization_id,
+      status,
+      phone_number: numero,
+    });
+    if (desfecho === "arquivada") {
+      logger.info("waha.ingest: sessão que nunca pareou foi arquivada ao expirar", {
+        channel_session_id: session.id,
+        organization_id: session.organization_id,
+        status,
+      });
+      return;
+    }
+    // `em_execucao` (reserva viva) ou `preservada`: o evento segue o caminho de
+    // sempre, que ainda assim não abre aviso — sessão sem número não avisa.
+  }
+
   const update: Record<string, unknown> = { status, last_status_change_at: now };
   if (status === "WORKING" && !session.is_warmup_complete) {
     if (!session.warmup_started_at) {
@@ -2043,23 +2094,15 @@ async function handleSessionStatus(
   // chegou, a coluna atualizou, e o dono só descobriu ao estranhar que ninguém
   // escrevia. O estado certo no lugar que ninguém olha não vale nada.
   //
-  // O apelido é buscado aqui, e não recebido: com dois números ligados, um aviso
-  // que não diz QUAL conexão caiu obriga o operador a adivinhar. É uma consulta
-  // a mais num evento raro — status muda algumas vezes por dia, não por minuto.
-  const { data: apelidoRow } = await admin
-    .from("channel_sessions")
-    .select("display_name, phone_number")
-    .eq("id", session.id)
-    .maybeSingle();
-
+  // O `numero` vai junto: é o que separa conexão de QR nunca pareado dentro do
+  // próprio seam de aviso (#3416) — e ele é lido ANTES do UPDATE, de propósito,
+  // porque é a leitura que decide o ramo do descarte logo acima.
   await sincronizarSaudeDaConexao(
     admin,
-    { id: session.id, organization_id: session.organization_id, status },
+    { id: session.id, organization_id: session.organization_id, status, phone_number: numero },
     // Veio do próprio transporte: se ele conseguiu nos contar, está alcançável.
     { reachable: true, status, detail: null },
-    (apelidoRow?.display_name as string | null) ??
-      (apelidoRow?.phone_number as string | null) ??
-      "sem nome",
+    apelido,
   );
 }
 
