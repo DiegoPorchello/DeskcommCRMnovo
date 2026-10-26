@@ -123,6 +123,17 @@ describe("recibo técnico de automação não guarda a frase do provedor", () =>
     });
     expect(JSON.stringify(seguro)).not.toContain(PESSOAL);
   });
+  it("código numérico não ganha precedência técnica; código string conhecido ganha", () => {
+    const entrada = (codigo: unknown): ActionResultDetail => ({ type: "send_email", status: "failed",
+      detail: { error_code: codigo, reason: "http_503", error: PESSOAL } });
+    const numerico = resultadoParaRecibo(entrada(131026));
+    expect(numerico.error).toBe("http_503");
+    expect(numerico.detail?.error_code).toBe("http_503");
+    const texto = resultadoParaRecibo(entrada("131026"));
+    expect(texto.error).toBe("131026");
+    expect(texto.detail?.error_code).toBe("131026");
+  });
+
   it("reaplicar o saneamento não altera um recibo já protegido", () => {
     const seguro = resultadoParaRecibo({
       type: "send_email",
