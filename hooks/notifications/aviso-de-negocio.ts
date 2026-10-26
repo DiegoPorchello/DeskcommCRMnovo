@@ -112,7 +112,7 @@ export function avisosDoNegocio(
 }
 
 /**
- * O instante da transação em milissegundos (string) — a CHAVE do casamento
+ * O instante da transação em microssegundos (string) — a CHAVE do casamento
  * entre o UPDATE do Realtime e o evento do `event_log`.
  *
  * `trg_crm_leads_updated_at` põe `updated_at = now()` no BEFORE UPDATE e o
@@ -124,24 +124,23 @@ export function avisosDoNegocio(
  */
 export function carimboDaTransacao(valor: unknown): string | null {
   if (typeof valor !== "string") return null;
-  const ms = Date.parse(valor);
-  return Number.isNaN(ms) ? null : String(ms);
+  // timestamptz chega como string nos dois transportes. Date.parse sozinho
+  // descarta os três últimos dígitos do Postgres e confundiria transações.
+  const partes = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}(?::?\d{2})?)$/.exec(valor);
+  if (!partes) return null;
+  const fracao = (partes[3] ?? "").padEnd(6, "0");
+  const fuso = partes[4]!.replace(/^([+-]\d{2})$/, "$1:00");
+  const ms = Date.parse(`${partes[1]}T${partes[2]}.${fracao.slice(0, 3)}${fuso}`);
+  if (!Number.isFinite(ms)) return null;
+  return (BigInt(ms) * 1000n + BigInt(fracao.slice(3))).toString();
 }
-
-/**
- * Folga do casamento, em ms. `now()` é idêntico nos dois lados da transação e
- * a diferença medida é zero; a folga existe só para o arredondamento de
- * serialização (µs do Postgres → ms do JS). Uma transação vizinha já cai fora:
- * `now()` não se repete.
- */
-const TOLERANCIA_DA_TRANSACAO_MS = 1500;
 
 /**
  * Quais avisos o BANCO atesta para este UPDATE — o caminho de quem a sessão
  * nunca viu o negócio (issue #3224).
  *
- * O evento só vale se nasceu da MESMA transação do UPDATE (±
- * `TOLERANCIA_DA_TRANSACAO_MS`), da MESMA organização e do MESMO negócio. É
+ * O evento só vale se nasceu no instante EXATO da transação do UPDATE,
+ * da MESMA organização e do MESMO negócio. É
  * esse casamento que mantém a #3040 fora: a atribuição de ontem, que a aba
  * nunca viu, não vira aviso hoje — o que a aba vê agora é o carimbo da própria
  * mensagem do vendedor, e o evento antigo não casa com ele.
@@ -164,14 +163,13 @@ export function avisosDoBanco(entrada: {
 }): AvisoDeNegocio[] {
   const { organizationId, leadId, carimboDoUpdate, eventos, novo, userId } = entrada;
   if (!novo.owner_user_id || novo.owner_user_id !== userId) return [];
-  const base = Number(carimboDoUpdate);
-  if (!Number.isFinite(base)) return [];
+  if (!/^-?\d+$/.test(carimboDoUpdate)) return [];
 
   const daTransacao = eventos.filter((evento) => {
     if (evento.organization_id !== organizationId) return false;
     if (evento.entity_id !== leadId) return false;
     const quando = carimboDaTransacao(evento.created_at);
-    return quando !== null && Math.abs(Number(quando) - base) <= TOLERANCIA_DA_TRANSACAO_MS;
+    return quando !== null && quando === carimboDoUpdate;
   });
 
   const avisos: AvisoDeNegocio[] = [];

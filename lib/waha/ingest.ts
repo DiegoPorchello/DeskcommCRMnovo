@@ -2023,6 +2023,7 @@ async function handleSessionStatus(
   const { data: linha, error: erroDaLeitura } = await admin
     .from("channel_sessions")
     .select("display_name, phone_number")
+    .eq("organization_id", session.organization_id)
     .eq("id", session.id)
     .maybeSingle();
   const numero =
@@ -2085,7 +2086,17 @@ async function handleSessionStatus(
     // decide envio calcula na leitura com a mesma função.
     if (await aquecimentoTerminou(admin, session)) update.warmup_completed_at = now;
   }
-  await admin.from("channel_sessions").update(update).eq("id", session.id);
+  const atualizar = admin.from("channel_sessions").update(update)
+    .eq("organization_id", session.organization_id).eq("id", session.id);
+  if (numero === null && status === "FAILED") {
+    // O descarte pode ter perdido a corrida para o pareamento. O fallback
+    // também não pode sobrescrever WORKING/número novo com o FAILED antigo.
+    const { data: atualizadas, error } = await atualizar
+      .is("phone_number", null).is("archived_at", null).neq("status", "WORKING").select("id");
+    if (error || !atualizadas || atualizadas.length !== 1) return;
+  } else {
+    await atualizar;
+  }
 
   // ─── E agora alguém precisa SABER ────────────────────────────────────────
   //

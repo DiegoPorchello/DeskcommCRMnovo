@@ -34,6 +34,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { descartarSessaoQueNuncaPareou } from "@/lib/channels/descartar-sem-parear";
 import { listarConexoesCaidas } from "@/lib/channels/health";
 import { loadOnboardingChannel } from "@/lib/channels/onboarding-session";
 import { lerUsoDaOrganizacao } from "@/lib/cobranca/uso";
@@ -61,6 +62,8 @@ const PAREADA = "22222222-2222-4222-8222-222222222222";
  * esconderia.
  */
 function banco() {
+  let antesDeArquivar: (() => void) | undefined;
+  let arquivamentoSemRecibo = false;
   const estado = {
     tabelas: {} as Record<string, Linha[]>,
     ops: [] as { tabela: string; op: string; payload?: unknown }[],
@@ -129,6 +132,10 @@ function banco() {
     const executar = (): { data: unknown; error: { message: string } | null } => {
       const m = pedido.mutacao;
       if (m) {
+        if (nome === "channel_sessions" && m.op === "update" && (m.payload as Linha).archived_at) {
+          antesDeArquivar?.();
+          if (arquivamentoSemRecibo) return { data: [], error: null };
+        }
         const alvo = linhasDe(nome).filter((l) => pedido.filtros.every((f) => f(l)));
         if (m.op === "update") alvo.forEach((l) => Object.assign(l, m.payload));
         else if (m.op === "insert") {
@@ -146,7 +153,8 @@ function banco() {
             (l) => !pedido.filtros.every((f) => f(l)),
           );
         }
-        return { data: null, error: null };
+        // UPDATE ... SELECT retorna somente as linhas afetadas, em snapshots.
+        return { data: pedido.colunas ? alvo.map((l) => projetar(pedido.colunas, l)) : null, error: null };
       }
       return selecionar(false);
     };
@@ -223,6 +231,8 @@ function banco() {
 
   return {
     admin: { from } as never,
+    aoArquivar(acao: () => void) { antesDeArquivar = acao; },
+    semReciboDeArquivamento() { arquivamentoSemRecibo = true; },
     semear(tabela: string, linhas: Linha[]) {
       estado.tabelas[tabela] = linhas.map((l) => ({ ...l }));
     },
@@ -504,5 +514,54 @@ describe("as cercas do arquivamento", () => {
 
     expect(b.linhas("channel_sessions")[0]).toMatchObject({ archived_at: expect.any(String) });
     expect(b.linhas("conversations")).toHaveLength(1);
+  });
+});
+
+
+describe("pareamento concorrente à expiração do QR", () => {
+  it("um número chega depois da leitura: nem arquivamento nem fallback derrubam o pareamento", async () => {
+    b.semear("channel_sessions", [linhaSemNumero()]);
+    b.aoArquivar(() => {
+      Object.assign(b.linhas("channel_sessions")[0]!, {
+        phone_number: "+5511999998888", status: "WORKING", display_name: "Comercial",
+      });
+    });
+    await evento("FAILED");
+    expect(b.linhas("channel_sessions")[0]).toMatchObject({
+      phone_number: "+5511999998888", status: "WORKING", archived_at: null,
+    });
+    expect(b.escritas("agent_inbox_items", "update")).toEqual([]);
+    expect(b.escritas("agent_inbox_items", "insert")).toEqual([]);
+  });
+
+  it("WORKING já foi confirmado, mesmo sem telefone espelhado: não arquiva nem volta a FAILED", async () => {
+    b.semear("channel_sessions", [linhaSemNumero()]);
+    b.aoArquivar(() => { b.linhas("channel_sessions")[0]!.status = "WORKING"; });
+    await evento("FAILED");
+    expect(b.linhas("channel_sessions")[0]).toMatchObject({ status: "WORKING", archived_at: null });
+    expect(b.escritas("agent_inbox_items", "update")).toEqual([]);
+  });
+
+  it("zero linhas arquivadas não fecha avisos como se a sessão tivesse sido removida", async () => {
+    b.semear("channel_sessions", [linhaSemNumero()]);
+    b.semear("agent_inbox_items", [{
+      id: "aviso-aberto", organization_id: ORG, ref_kind: "channel_session", ref_id: SESSAO,
+      status: "open", kind: "channel_number_alert",
+    }]);
+    b.semear("channel_session_health", [{
+      organization_id: ORG, channel_session_id: SESSAO, escalated_status: "FAILED",
+    }]);
+    b.semReciboDeArquivamento();
+    // Isola o fechador de arquivamento do reconciliador normal de saúde,
+    // que também pode encerrar alertas antigos de uma sessão sem número.
+    const desfecho = await descartarSessaoQueNuncaPareou(b.admin, {
+      id: SESSAO, organization_id: ORG, status: "FAILED", phone_number: null,
+    });
+    expect(desfecho).toBe("preservada");
+    expect(b.linhas("channel_sessions")[0]!.archived_at).toBeNull();
+    expect(b.escritas("agent_inbox_items", "update")).toEqual([]);
+    expect(b.linhas("agent_inbox_items")[0]!.status).toBe("open");
+    expect(b.linhas("channel_session_health")[0]!.escalated_status).toBe("FAILED");
+    expect(b.escritas("channel_session_health", "update")).toEqual([]);
   });
 });

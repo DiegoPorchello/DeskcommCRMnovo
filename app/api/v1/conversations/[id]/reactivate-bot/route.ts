@@ -57,12 +57,18 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
   // A leitura é escopada por `organization_id` da sessão (nunca só por `id`):
   // conversa de outro tenant não é "conversa de outro atendente", é inexistente
   // — e quem decide isso é o filtro, não o `dono == null` que sobra dele.
-  const { data: donaDaConversa } = await supabase
+  const { data: donaDaConversa, error: erroDoDono } = await supabase
     .from("conversations")
     .select("assigned_to_user_id")
     .eq("id", id)
     .eq("organization_id", activeOrg.orgId)
     .maybeSingle();
+  if (erroDoDono) {
+    return fail("internal_error", t("Erro ao validar conversa."), 500, { requestId });
+  }
+  if (!donaDaConversa) {
+    return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
+  }
   const dono =
     (donaDaConversa as { assigned_to_user_id: string | null } | null)?.assigned_to_user_id ?? null;
   if (dono !== null && dono !== authUser.id && !roleAtLeast(activeOrg.role, "manager")) {
@@ -84,7 +90,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
       actor: { type: "user", id: authUser.id, role: activeOrg.role },
       requestId,
     },
-    { conversationId: id },
+    { conversationId: id, expectedAssignee: dono },
   );
 
   if (!resultado.ok) {

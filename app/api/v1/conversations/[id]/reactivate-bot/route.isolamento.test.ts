@@ -64,6 +64,10 @@ interface Estado {
   rpcs: Array<{ nome: string; params: Linha }>;
   /** As atribuições que a `fn_conversation_assign` do dublê efetivamente aplicou. */
   escritasDeComando: Linha[];
+  erroNaLeituraDoDono?: boolean;
+  aposLeituraDoDono?: () => void;
+  antesDeAtribuir?: () => void;
+  reciboVazio?: boolean;
 }
 
 /**
@@ -76,15 +80,16 @@ function clienteFalso(estado: Estado) {
   function builder(tabela: string) {
     const filtros: Array<(l: Linha) => boolean> = [];
     let patch: Linha | null = null;
+    let colunas = "";
     let inserida: Linha | null = null;
     const linhas = () => (estado.tabelas[tabela] ??= []);
     const aplica = () => {
       const alvos = linhas().filter((l) => filtros.every((f) => f(l)));
       if (patch) for (const l of alvos) Object.assign(l, patch);
-      return alvos;
+      return alvos.map((l) => ({ ...l }));
     };
     const q = {
-      select: () => q,
+      select: (campos: string) => { colunas = campos; return q; },
       update: (v: Linha) => {
         patch = v;
         return q;
@@ -114,7 +119,13 @@ function clienteFalso(estado: Estado) {
           linhas().push(row);
           return { data: row, error: null };
         }
-        return { data: aplica()[0] ?? null, error: null };
+        // Respostas são snapshots independentes, como no HTTP do PostgREST.
+        const data = aplica()[0] ?? null;
+        if (tabela === "conversations" && colunas === "assigned_to_user_id") {
+          if (estado.erroNaLeituraDoDono) return { data: null, error: { message: "indisponível" } };
+          estado.aposLeituraDoDono?.();
+        }
+        return { data, error: null };
       },
       single: async () => {
         if (inserida) {
@@ -151,11 +162,16 @@ function clienteFalso(estado: Estado) {
         const conv = (estado.tabelas.conversations ?? []).find(
           (c) => c.id === params.p_conversation_id && c.organization_id === params.p_organization_id,
         );
-        if (!conv) return { data: [], error: null };
+        estado.antesDeAtribuir?.();
+        if (!conv || estado.reciboVazio) return { data: [], error: null };
+        // SETOF conversations: perder a comparação retorna [], sem erro SQL.
+        if (params.p_enforce_expected && conv.assigned_to_user_id !== params.p_expected_assignee) {
+          return { data: [], error: null };
+        }
         estado.escritasDeComando.push({ ...params });
         conv.assigned_to_user_id = (params.p_to_user_id as string | null) ?? null;
         conv.assignee_kind = params.p_to_user_id ? "user" : null;
-        return { data: [conv], error: null };
+        return { data: [{ ...conv }], error: null };
       }
       return { data: null, error: null };
     },
@@ -294,5 +310,81 @@ describe("reactivate-bot — a conversa de outro tenant não existe para mim (#3
       assignee_kind: "user",
     });
     expect(estado.escritasDeComando).toHaveLength(0);
+  });
+});
+
+
+describe("reactivate-bot — falha de leitura e concorrência", () => {
+  function esperarRecusaSemRetomada() {
+    expect(linhaDe(estado.tabelas.contacts!, CONTATO_A).force_human).toBe(true);
+    expect(linhaDe(estado.tabelas.conversations!, CONV_A)).toMatchObject({
+      assignee_kind: "user", bot_silenced_until: SILENCIO_A, last_handoff_at: SILENCIO_A,
+    });
+    expect(estado.escritasDeComando).toEqual([]);
+    expect(estado.rpcs.map((r) => r.nome)).not.toContain("emit_event");
+    expect(estado.rpcs.map((r) => r.nome)).not.toContain("fn_passagem_devolvida");
+    expect(audit).not.toHaveBeenCalled();
+  }
+
+  it("erro ao consultar o dono recusa sem tratar a conversa como vaga", async () => {
+    estado.erroNaLeituraDoDono = true;
+    const res = await chamarComo(ORG_A, USER_A);
+    expect(res.status).toBe(500);
+    esperarRecusaSemRetomada();
+    expect(estado.rpcs).toEqual([]);
+  });
+
+  it("o colega assume entre a consulta da rota e a releitura: recusa sem liberar", async () => {
+    estado.aposLeituraDoDono = () => {
+      linhaDe(estado.tabelas.conversations!, CONV_A).assigned_to_user_id = USER_B;
+    };
+    const res = await chamarComo(ORG_A, USER_A);
+    expect(res.status).toBe(409);
+    expect(linhaDe(estado.tabelas.conversations!, CONV_A).assigned_to_user_id).toBe(USER_B);
+    esperarRecusaSemRetomada();
+    expect(estado.rpcs).toEqual([]);
+  });
+
+  it("o colega assume depois da releitura: CAS não tira dele nem emite retomada", async () => {
+    estado.antesDeAtribuir = () => {
+      linhaDe(estado.tabelas.conversations!, CONV_A).assigned_to_user_id = USER_B;
+    };
+    const res = await chamarComo(ORG_A, USER_A);
+    expect(res.status).toBe(409);
+    expect(linhaDe(estado.tabelas.conversations!, CONV_A).assigned_to_user_id).toBe(USER_B);
+    esperarRecusaSemRetomada();
+  });
+
+  it("outro release deixa a conversa vaga: recibo CAS vazio não autoriza retomar por conta dele", async () => {
+    estado.antesDeAtribuir = () => {
+      Object.assign(linhaDe(estado.tabelas.conversations!, CONV_A), {
+        assigned_to_user_id: null, assignee_kind: null,
+      });
+    };
+    const res = await chamarComo(ORG_A, USER_A);
+    expect(res.status).toBe(409);
+    expect(linhaDe(estado.tabelas.conversations!, CONV_A)).toMatchObject({
+      assigned_to_user_id: null, assignee_kind: null, bot_silenced_until: SILENCIO_A,
+    });
+    expect(linhaDe(estado.tabelas.contacts!, CONTATO_A).force_human).toBe(true);
+    expect(estado.escritasDeComando).toEqual([]);
+    expect(estado.rpcs.map((r) => r.nome)).toEqual(["fn_conversation_assign"]);
+    expect(audit).not.toHaveBeenCalled();
+  });
+
+  it("RPC sem erro, mas sem linha devolvida, não autoriza efeitos de sucesso", async () => {
+    estado.reciboVazio = true;
+    const res = await chamarComo(ORG_A, USER_A);
+    expect(res.status).toBe(409);
+    esperarRecusaSemRetomada();
+  });
+
+  it("controle: o dono continua sendo o mesmo e a devolução completa acontece", async () => {
+    const res = await chamarComo(ORG_A, USER_A);
+    expect(res.status).toBe(200);
+    expect(linhaDe(estado.tabelas.conversations!, CONV_A)).toMatchObject({
+      assigned_to_user_id: null, bot_silenced_until: null, assignee_kind: "ai",
+    });
+    expect(estado.rpcs.map((r) => r.nome)).toContain("emit_event");
   });
 });

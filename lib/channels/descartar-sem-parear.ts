@@ -102,11 +102,19 @@ export async function descartarSessaoQueNuncaPareou(
     // `archived_at is null`. `STOPPED` (e não `FAILED`) porque o que aconteceu
     // foi o fim do QR, não a queda de um número.
     const agora = new Date().toISOString();
-    const { error } = await admin
+    let arquivar = admin
       .from("channel_sessions")
       .update({ archived_at: agora, status: "STOPPED", last_status_change_at: agora })
       .eq("organization_id", sessao.organization_id)
-      .eq("id", sessao.id);
+      .eq("id", sessao.id)
+      .is("archived_at", null)
+      .neq("status", "WORKING");
+    // O snapshot do webhook não decide pelo estado que mudou durante a leitura
+    // da reserva. Número e estado são conferidos no próprio UPDATE atômico.
+    arquivar = sessao.phone_number === null
+      ? arquivar.is("phone_number", null)
+      : arquivar.eq("phone_number", sessao.phone_number);
+    const { data: arquivadas, error } = await arquivar.select("id");
     if (error) {
       logger.warn("descarte de sessão sem número: arquivamento falhou", {
         channel_session_id: sessao.id,
@@ -115,6 +123,8 @@ export async function descartarSessaoQueNuncaPareou(
       });
       return "preservada";
     }
+
+    if (!arquivadas || arquivadas.length !== 1 || arquivadas[0]?.id !== sessao.id) return "preservada";
 
     // (b) O aviso não fica órfão — as MESMAS duas chamadas e o mesmo
     // best-effort da rota DELETE: saúde e pausa. Uma falha aqui não desfaz o
