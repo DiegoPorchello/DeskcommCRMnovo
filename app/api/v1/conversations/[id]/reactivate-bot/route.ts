@@ -23,6 +23,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { roleAtLeast } from "@/lib/auth/types";
 import { devolverAtendimentoAoAgente } from "@/lib/escalacao/retomada";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -46,6 +47,35 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
   const { user: authUser, org: activeOrg } = authz;
 
   const supabase = await createClient();
+
+  // #3436 — conversa que tem dono e o dono NÃO é quem pediu só volta ao agente
+  // pela mão de um `manager` ou acima (ou de quem a assumir antes: `claim`).
+  // A regra mora AQUI, e não em `devolverAtendimentoAoAgente`, porque o cron
+  // `handoff-devolucao` chama a mesma função SEM sessão — uma regra de dono lá
+  // dentro recusaria a devolução automática que o prazo venceu.
+  //
+  // A leitura é escopada por `organization_id` da sessão (nunca só por `id`):
+  // conversa de outro tenant não é "conversa de outro atendente", é inexistente
+  // — e quem decide isso é o filtro, não o `dono == null` que sobra dele.
+  const { data: donaDaConversa } = await supabase
+    .from("conversations")
+    .select("assigned_to_user_id")
+    .eq("id", id)
+    .eq("organization_id", activeOrg.orgId)
+    .maybeSingle();
+  const dono =
+    (donaDaConversa as { assigned_to_user_id: string | null } | null)?.assigned_to_user_id ?? null;
+  if (dono !== null && dono !== authUser.id && !roleAtLeast(activeOrg.role, "manager")) {
+    // Sem tocar no silêncio, no dono nem na autorização do contato: a recusa
+    // acontece antes de qualquer escrita, então a conversa do colega fica
+    // exatamente como estava.
+    return fail(
+      "forbidden",
+      t("Esta conversa é de outro atendente. Peça a um gerente ou assuma a conversa."),
+      403,
+      { requestId },
+    );
+  }
 
   const resultado = await devolverAtendimentoAoAgente(
     {
