@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { useActiveOrg, useUser } from "@/hooks/auth/AuthProvider";
 import {
@@ -61,7 +61,16 @@ export function useCrmAlerts(): void {
    * aba vê de um negócio chega sem histórico — e aí quem responde é o BANCO
    * (`avisosDoBanco`, issue #3224), consultado uma vez por negócio.
    */
-  const memorias = useRef(new Map<string, EstadoVisto>());
+  const memorias = useRef(new Map<string, { estado: EstadoVisto; vigenciaDoDono: symbol }>());
+  const contexto = useRef({ orgId, userId: user.id, ativo: false });
+  useEffect(() => {
+    // A identidade do objeto é a geração, como o canal vigente do Realtime.
+    // Voltar à mesma organização não revalida uma consulta da visita anterior.
+    const geracao = { orgId, userId: user.id, ativo: orgId !== null };
+    contexto.current = geracao;
+    memorias.current.clear();
+    return () => { geracao.ativo = false; };
+  }, [orgId, user.id]);
 
   /**
    * Entrega os avisos de um evento — o único ponto que chama `entregarAviso`
@@ -92,6 +101,8 @@ export function useCrmAlerts(): void {
 
   const onLead = useCallback(
     (payload: unknown) => {
+      const geracao = contexto.current;
+      if (!geracao.ativo || geracao.orgId !== orgId || geracao.userId !== user.id) return;
       const { novo, antigo } = sides(payload);
       if (!novo) return;
       const leadId = str(novo.id);
@@ -101,9 +112,14 @@ export function useCrmAlerts(): void {
       // dela, o `old` — e só quando ele de fato carrega os campos (instalação
       // com REPLICA IDENTITY FULL). Sem nenhum dos dois o histórico é
       // desconhecido, e aí a decisão sai do banco (logo abaixo, #3224).
-      const anterior = memorias.current.get(leadId) ?? estadoDoAntigo(antigo);
+      const memoria = memorias.current.get(leadId);
+      const anterior = memoria?.estado ?? estadoDoAntigo(antigo);
       const estado = estadoDoNovo(novo);
-      memorias.current.set(leadId, estado);
+      // Retirar o dono invalida a consulta mesmo se ele reassumir mais tarde.
+      // Status e atividade não trocam esta vigência nem reordenam avisos.
+      const vigenciaDoDono = memoria && memoria.estado.owner_user_id === estado.owner_user_id
+        ? memoria.vigenciaDoDono : Symbol();
+      memorias.current.set(leadId, { estado, vigenciaDoDono });
 
       const titulo = str(novo.title) || "Lead";
       const pipelineId = str(novo.pipeline_id);
@@ -125,6 +141,11 @@ export function useCrmAlerts(): void {
       if (anterior !== null || !carimbo || !orgId) return;
       if (estado.owner_user_id !== user.id) return;
       void buscaEventosDoNegocio(leadId).then((eventos) => {
+        if (!geracao.ativo || contexto.current !== geracao) return;
+        // A consulta atesta a transação capturada; quem recebe ainda precisa
+        // ser o responsável do último UPDATE observado, não só daquele snapshot.
+        const atual = memorias.current.get(leadId);
+        if (!atual || atual.vigenciaDoDono !== vigenciaDoDono || atual.estado.owner_user_id !== user.id) return;
         const doBanco = avisosDoBanco({
           organizationId: orgId,
           leadId,

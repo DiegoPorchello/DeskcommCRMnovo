@@ -79,3 +79,23 @@ fechamento de avisos é posterior ao recibo do arquivamento.
 A precondição explícita de responsável foi acrescentada ao caminho HTTP do
 botão. Esta integração não redefine a política dos outros chamadores. A leitura
 de lease e o UPDATE da sessão não viraram uma transação entre tabelas.
+
+## Complemento da revisão — confirmação pendente no hook
+
+O hook real foi testado com uma Promise pendente na fronteira da consulta. A
+primeira prova teve **7 falhas e 2 controles verdes**: mudança de organização,
+pessoa, ausência de organização, desmonte e retirada do responsável. A visita
+A→B→A precisa de uma geração nova e de memória do contexto atual.
+
+A geração é um objeto com cancelamento no cleanup, como o canal vigente do
+Realtime. Uma resposta só entrega se essa geração ainda estiver ativa. A memória
+registra também a vigência do responsável: retirar e reatribuir não revalida a
+consulta da atribuição anterior. Esse controle adicional teve **1 falha e 9
+controles verdes** antes do ajuste de vigência.
+
+O recorte final passou **4 arquivos e 56 casos**, incluindo os **10 casos novos**
+e as regressões de atribuição, carimbo e endpoint. Atualização irrelevante com o
+mesmo dono é controle positivo. O carimbo e o estado da transação confirmada
+continuam sendo os da consulta; não foi criada nova regra para status ou ordem
+dos avisos. ESLint dos dois arquivos alterados e diff check passaram. Não houve
+browser, banco, build ou typecheck completo neste complemento.
