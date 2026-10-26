@@ -5,6 +5,8 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * Autz (spec 13 §5): o PRÓPRIO atendente muda a sua; manager+ muda de qualquer
  * membro da org. requireRole("agent") + checagem (user_id == auth.uid() OR
  * role>=manager). A RLS de attendant_availability (own OR manager) é backstop.
+ * Exceção: a JORNADA (`schedule`) só manager+ grava, nem a própria — ver o
+ * comentário junto da checagem.
  *
  * Persistência do <AttendantStatusToggle> (spec 04 §8). A chave diz a INTENÇÃO
  * de quem atende ("estou de plantão"), e nada a desliga por conta própria: o
@@ -71,6 +73,20 @@ export async function PATCH(
       });
     }
     throw err;
+  }
+
+  // A JORNADA é atribuída por quem gerencia, não escolhida por quem atende.
+  // Ela é o que impede o atendente de ficar de plantão fora do expediente
+  // (`estaDePlantao` corta a chave fora das janelas); se o próprio atendente
+  // pudesse reescrevê-la, bastaria publicar "seg–dom 00:00–23:59" para driblar
+  // o horário de trabalho. A chave de plantão (`is_available`) continua dele.
+  if (!isManager && input.schedule !== undefined) {
+    return fail(
+      "forbidden_role",
+      t("Só gerentes e administradores definem o horário de atendimento."),
+      403,
+      { requestId },
+    );
   }
 
   const supabase = await createClient();

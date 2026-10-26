@@ -12,6 +12,7 @@ import {
   useUpdateRouting,
   type AttendantAvailability,
 } from "@/hooks/team/useAttendants";
+import { useAssignSector, useSectors, type Sector } from "@/hooks/team/useSectors";
 import { estaDePlantao } from "@/lib/routing/eligibility";
 import {
   ROUTING_MODES,
@@ -80,6 +81,58 @@ interface Attendant {
   name: string;
   email: string | null;
   availability: AttendantAvailability;
+  sectorId: string | null;
+}
+
+/** Valor do filtro de setor: todos, sem setor, ou o id de um setor. */
+const TODOS_OS_SETORES = "__todos__";
+const SEM_SETOR = "__sem_setor__";
+
+/**
+ * O setor da pessoa, na mesma linha da jornada e da capacidade. Gerente escolhe
+ * na hora; quem só lê vê o nome. Setor apagado em outra aba não vira id cru na
+ * tela: sem nome conhecido, a célula diz "Sem setor", que é o que o banco diz
+ * depois do `on delete cascade` do vínculo.
+ */
+function SectorCell({
+  attendant,
+  sectors,
+  canManage,
+}: {
+  attendant: Attendant;
+  sectors: Sector[];
+  canManage: boolean;
+}) {
+  const t = useT();
+  const assign = useAssignSector();
+  const atual = sectors.find((s) => s.id === attendant.sectorId) ?? null;
+  if (!canManage) {
+    return <span className="text-sm">{atual?.name ?? t("Sem setor")}</span>;
+  }
+  if (sectors.length === 0) {
+    return <span className="text-xs text-muted-foreground">{t("Cadastre setores na aba Setores")}</span>;
+  }
+  return (
+    <Select
+      value={atual?.id ?? SEM_SETOR}
+      disabled={assign.isPending}
+      onValueChange={(v) =>
+        assign.mutate({ userId: attendant.userId, sectorId: v === SEM_SETOR ? null : v })
+      }
+    >
+      <SelectTrigger className="h-8 w-[160px]" aria-label={`${t("Setor de")} ${attendant.name}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={SEM_SETOR}>{t("Sem setor")}</SelectItem>
+        {sectors.map((s) => (
+          <SelectItem key={s.id} value={s.id}>
+            {s.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 /**
@@ -556,6 +609,9 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
   const avail = useAttendants();
   const patch = useUpdateAvailability();
   const [scheduleFor, setScheduleFor] = useState<Attendant | null>(null);
+  const [filtroSetor, setFiltroSetor] = useState<string>(TODOS_OS_SETORES);
+  const sectorsQuery = useSectors();
+  const sectors = useMemo(() => sectorsQuery.data?.data ?? [], [sectorsQuery.data]);
   const now = useMemo(() => new Date(), []);
 
   const attendants: Attendant[] = useMemo(
@@ -565,9 +621,17 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
         name: a.name ?? a.email ?? a.user_id.slice(0, 8),
         email: a.email,
         availability: a,
+        sectorId: a.sector_id ?? null,
       })),
     [avail.data],
   );
+
+  const visiveis = attendants.filter((a) => {
+    if (filtroSetor === TODOS_OS_SETORES) return true;
+    const temSetorConhecido = sectors.some((s) => s.id === a.sectorId);
+    if (filtroSetor === SEM_SETOR) return !temSetorConhecido;
+    return a.sectorId === filtroSetor;
+  });
 
   const isLoading = avail.isLoading;
   const isError = avail.isError;
@@ -592,6 +656,27 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
               "Status, carga e capacidade de cada atendente — e a jornada semanal que decide os horários oferecidos na Agenda. Sem ela ninguém consegue marcar.",
             )}
           </p>
+          {sectors.length > 0 ? (
+            <div className="mt-3 flex items-center gap-2">
+              <Label htmlFor="filtro-setor" className="text-xs">
+                {t("Setor")}
+              </Label>
+              <Select value={filtroSetor} onValueChange={setFiltroSetor}>
+                <SelectTrigger id="filtro-setor" className="h-8 w-[200px]" aria-label={t("Filtrar por setor")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS_OS_SETORES}>{t("Todos os setores")}</SelectItem>
+                  <SelectItem value={SEM_SETOR}>{t("Sem setor")}</SelectItem>
+                  {sectors.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -611,6 +696,7 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
             <TableHeader className="max-md:hidden">
               <TableRow>
                 <TableHead>{t("Atendente")}</TableHead>
+                <TableHead>{t("Setor")}</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>{t("Carga")}</TableHead>
                 <TableHead>{t("Capacidade")}</TableHead>
@@ -619,7 +705,14 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody className="max-md:block">
-              {attendants.map((a) => {
+              {visiveis.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={canManage ? 7 : 6} className="text-sm text-muted-foreground">
+                    {t("Nenhum atendente neste setor.")}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {visiveis.map((a) => {
                 const capacity = a.availability?.capacity ?? 5;
                 const load = a.availability?.current_load ?? 0;
                 const windows = a.availability?.schedule?.windows ?? [];
@@ -633,6 +726,12 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
                       {a.email ? (
                         <div className="text-xs text-muted-foreground">{a.email}</div>
                       ) : null}
+                    </TableCell>
+                    <TableCell
+                      data-rotulo={t("Setor")}
+                      className={`max-md:flex max-md:items-center max-md:p-0 ${ROTULO_NO_CELULAR}`}
+                    >
+                      <SectorCell attendant={a} sectors={sectors} canManage={canManage} />
                     </TableCell>
                     <TableCell className="max-md:p-0">
                       <div className="flex flex-col items-start gap-1.5">

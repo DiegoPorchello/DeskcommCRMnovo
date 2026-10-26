@@ -9,13 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamMembersClient } from "./_components/TeamMembersClient";
 import { TeamInvitesClient } from "./_components/TeamInvitesClient";
 import { AttendantsClient } from "./_components/AttendantsClient";
+import { SectorsClient } from "./_components/SectorsClient";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Equipe" };
 
 /**
- * As duas abas são endereçáveis, e isso não é conveniência.
+ * As abas são endereçáveis, e isso não é conveniência.
  *
  * O editor de jornada — "meus horários de atendimento" — mora na aba
  * "Atendimento", atrás de um botão só de ícone. Quem abre a Agenda numa
@@ -26,7 +27,11 @@ export const metadata: Metadata = { title: "Equipe" };
  * `aba` em português porque é o que aparece na barra de endereço de quem usa o
  * produto; os valores internos das abas seguem os do componente.
  */
-const ABAS: Record<string, string> = { membros: "members", atendimento: "attendants" };
+const ABAS: Record<string, string> = {
+  membros: "members",
+  atendimento: "attendants",
+  setores: "sectors",
+};
 
 export default async function TeamPage({
   searchParams,
@@ -66,6 +71,7 @@ export default async function TeamPage({
         <TabsList>
           <TabsTrigger value="members">{t("Membros")}</TabsTrigger>
           <TabsTrigger value="attendants">{t("Atendimento")}</TabsTrigger>
+          <TabsTrigger value="sectors">{t("Setores")}</TabsTrigger>
         </TabsList>
         <TabsContent value="members" className="mt-4 flex flex-col gap-8">
           <TeamMembersClient currentUserId={user.id} canManage={isAdmin} />
@@ -89,16 +95,22 @@ export default async function TeamPage({
                 aqui pelo link e, antes, só lia a regra — um beco novo, criado pelo
                 próprio conserto do beco anterior.
 
-                O buraco de VERDADE continua aberto e está escrito de propósito: a
-                rota `PATCH /api/v1/attendants/availability/[user_id]` autoriza a
-                pessoa a mudar a PRÓPRIA jornada (`isSelf`), e não há tela para
-                isso. Enquanto não houver, pedir a um gerente é o caminho real.
+                E pedir a um gerente é o caminho certo, não um remendo: a rota
+                `PATCH /api/v1/attendants/availability/[user_id]` recusa a
+                jornada gravada pela própria pessoa — o horário de trabalho é
+                atribuído por quem gerencia, senão bastaria publicar 24 h para
+                ficar de plantão fora do expediente.
               */}
               {t(
                 "Só gerentes e administradores editam os horários de atendimento da equipe. Para publicar os seus, peça a um gerente que abra esta aba e use o botão “Editar horário” ao lado do seu nome.",
               )}
             </p>
           )}
+        </TabsContent>
+        <TabsContent value="sectors" className="mt-4">
+          {/* Qualquer membro lê os setores; só manager+ cadastra
+              (as rotas de escrita exigem manager). */}
+          <SectorsClient canManage={isManager} />
         </TabsContent>
       </Tabs>
     </div>
