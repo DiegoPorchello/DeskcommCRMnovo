@@ -65997,6 +65997,15 @@ comment on table public.automation_rule_contact_claims is
 comment on column public.automation_rule_contact_claims.event_id is
   'O evento que TOMOU a chave (auditoria da decisão: quem reservou, quando). on delete set null: o expurgo do evento não é impedido pela reserva.';
 
+-- Revoke + service role: a tabela nasce com o grant padrão do Postgres (que dá
+-- tudo a PUBLIC, e PUBLIC contém `authenticated`), e aí o invariante de travas a
+-- enxerga como GRAVÁVEL PELA SESSÃO e cobra as três travas `support_write_*` —
+-- que o desenho não quer: quem escreve aqui é o motor, com a service role.
+-- O mesmo desenho de event_log, medido contra tests/invariants/
+-- travas-de-suporte-cobrem-toda-tabela-na-instalacao.test.ts (#3267).
+revoke all on public.automation_rule_contact_claims from public, anon, authenticated;
+grant  all on public.automation_rule_contact_claims to service_role;
+
 notify pgrst, 'reload schema';
 
 
