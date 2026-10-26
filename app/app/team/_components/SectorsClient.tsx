@@ -38,7 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PencilSimple, Plus, Trash } from "@/lib/ui/icons";
 
 /**
- * Cadastro de setores de atendimento (migration 0767).
+ * Cadastro de setores de atendimento (migration 0801).
  *
  * Esta aba só CADASTRA. Quem põe o atendente no setor é a coluna "Setor" da aba
  * Atendimento, ao lado da jornada e da capacidade — é lá que se olha a pessoa

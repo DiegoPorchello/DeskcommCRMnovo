@@ -117,7 +117,7 @@ export const ApiErrorCodes = {
   // tela oferecer o contato existente em vez de só mostrar que deu erro.
   contact_exists: "contact_exists",
   // POST/PATCH /api/v1/attendants/sectors com nome que já existe na organização
-  // (índice attendant_sectors_org_name_unique, migration 0767).
+  // (índice attendant_sectors_org_name_unique, migration 0801).
   sector_name_taken: "sector_name_taken",
   duplicate_external_id: "duplicate_external_id",
   event_gone: "event_gone", // resend de run cujo event_log original foi apagado (on delete set null)

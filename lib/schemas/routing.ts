@@ -278,7 +278,7 @@ export const availabilityPatchSchema = z
 export type AvailabilityPatch = z.infer<typeof availabilityPatchSchema>;
 
 /**
- * Setores de atendimento (migration 0767). Os limites são os CHECKs da tabela
+ * Setores de atendimento (migration 0801). Os limites são os CHECKs da tabela
  * `attendant_sectors` — o Zod recusa antes, com mensagem para a pessoa, o que o
  * banco recusaria com um erro de constraint.
  */

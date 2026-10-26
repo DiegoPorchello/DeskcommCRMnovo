@@ -143,7 +143,7 @@ describe("GET /api/v1/attendants/availability", () => {
     // (`crm_list_available_attendants`), e o que a tela consome é `present` —
     // derivado no SERVIDOR com o prazo de `lib/atendimento/presenca.ts`.
     //
-    // `sector_id` ENTROU com os setores (migration 0767): a coluna "Setor" e o
+    // `sector_id` ENTROU com os setores (migration 0801): a coluna "Setor" e o
     // filtro da aba Atendimento leem daqui, sem uma chamada por linha.
     expect(Object.keys(body.data[0] ?? {}).sort()).toEqual(
       [

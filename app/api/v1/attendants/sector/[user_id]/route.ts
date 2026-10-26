@@ -4,7 +4,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * de setor ou tira do setor (`sector_id: null`). Manager+.
  *
  * Um setor por atendente: a chave do vínculo é `(organization_id, user_id)`
- * (migration 0767), então trocar é upsert da mesma linha. O PRÓPRIO atendente
+ * (migration 0801), então trocar é upsert da mesma linha. O PRÓPRIO atendente
  * não escolhe o setor — é decisão de quem gerencia a equipe, e por isso a
  * tabela não concede escrita a `authenticated`.
  *

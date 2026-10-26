@@ -4,7 +4,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * POST /api/v1/attendants/sectors — cria um setor (manager+).
  *
  * A leitura vai pelo client da sessão: a RLS de `attendant_sectors` é
- * org-wide (migration 0767). A escrita vai pelo admin client, porque a tabela
+ * org-wide (migration 0801). A escrita vai pelo admin client, porque a tabela
  * não concede escrita a `authenticated` — então a org vem de fonte confiável
  * (activeOrg do cookie) e é filtrada à mão, nunca lida do corpo.
  *

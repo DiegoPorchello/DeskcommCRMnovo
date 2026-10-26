@@ -17980,7 +17980,7 @@ export const DICIONARIO: Traducoes = {
   "Parâmetro inválido.": {
     es: "Parámetro no válido.",
   },
-  // Setores de atendimento (migration 0767) — Equipe › Setores e a coluna Setor.
+  // Setores de atendimento (migration 0801) — Equipe › Setores e a coluna Setor.
   "Nome do setor": { es: "Nombre del sector" },
   "Ex.: Comercial, Suporte, Financeiro": { es: "Ej.: Ventas, Soporte, Finanzas" },
   "Novo setor": { es: "Nuevo sector" },

@@ -63760,7 +63760,7 @@ create index if not exists idx_crm_leads_org_pipeline_position_id
 comment on index public.idx_crm_leads_org_pipeline_position_id is
   'Página da aba Lista do funil (#3172): (organization_id, pipeline_id) por igualdade e (position_in_stage, id) na ordem da consulta. `id` é o desempate que torna a paginação determinística quando dois negócios têm a mesma position_in_stage.';
 
--- ---- setores de atendimento (migration 0767) ----
+-- ---- setores de atendimento (migration 0801) ----
 create table if not exists public.attendant_sectors (
   id              uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -63810,8 +63810,8 @@ create policy tenant_isolation_attendant_sector_members_select on public.attenda
   using (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
 
 comment on table public.attendant_sectors is
-  'Setores de atendimento da organização (migration 0767). Nome único por organização (lower/btrim). Escrita só pelas rotas /api/v1/attendants/sectors (manager+).';
+  'Setores de atendimento da organização (migration 0801). Nome único por organização (lower/btrim). Escrita só pelas rotas /api/v1/attendants/sectors (manager+).';
 comment on table public.attendant_sector_members is
-  'Vínculo atendente → setor (migration 0767). Um setor por atendente: PK (organization_id, user_id). Apagar o setor solta os atendentes.';
+  'Vínculo atendente → setor (migration 0801). Um setor por atendente: PK (organization_id, user_id). Apagar o setor solta os atendentes.';
 
 notify pgrst, 'reload schema';

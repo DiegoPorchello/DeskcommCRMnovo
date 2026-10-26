@@ -33,7 +33,7 @@ export interface AttendantAvailability {
    * `is_available` + jornada (`estaDePlantao`), e nada aqui desliga a chave.
    */
   present: boolean;
-  /** Setor do atendente (migration 0767). `null` = sem setor. */
+  /** Setor do atendente (migration 0801). `null` = sem setor. */
   sector_id: string | null;
 }
 

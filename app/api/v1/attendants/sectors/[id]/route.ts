@@ -4,7 +4,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * DELETE /api/v1/attendants/sectors/[id] — apaga o setor (manager+).
  *
  * Apagar o setor solta os atendentes dele (FK `on delete cascade` no VÍNCULO,
- * migration 0767): eles ficam "sem setor", com jornada, carga e conversas
+ * migration 0801): eles ficam "sem setor", com jornada, carga e conversas
  * intactas. O audit guarda quantos estavam no setor, porque a linha do vínculo
  * deixa de existir e a trilha é o único lugar onde a resposta "quem estava lá"
  * sobrevive.

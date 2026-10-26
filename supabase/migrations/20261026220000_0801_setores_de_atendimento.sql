@@ -1,6 +1,6 @@
 -- manifest: **Setores de atendimento.** Duas tabelas novas: `attendant_sectors` (o cadastro de setores da organização — nome único por organização, sem diferenciar maiúsculas, e descrição opcional) e `attendant_sector_members` (cada atendente em no máximo UM setor, chave `(organization_id, user_id)`). FKs compostas com `organization_id` dos dois lados: o setor e o membro têm de ser da MESMA organização, e o banco segura isso. Apagar o setor solta os atendentes dele (eles ficam "sem setor"); apagar a filiação do membro (`user_organizations`) apaga o vínculo; membro revogado some das listas porque elas só leem filiação ativa. RLS: leitura por qualquer membro da organização; `authenticated` não escreve — a escrita é das rotas `/api/v1/attendants/sectors*`, que exigem manager e auditam. Idempotente; apêndice espelhado no `baseline.sql`; `MANIFEST.md` é histórico e não recebe linha.
 
--- 0767 — setores de atendimento.
+-- 0801 — setores de atendimento.
 --
 -- ─── O que entra ───────────────────────────────────────────────────────────
 --
@@ -72,8 +72,8 @@ create policy tenant_isolation_attendant_sector_members_select on public.attenda
   using (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
 
 comment on table public.attendant_sectors is
-  'Setores de atendimento da organização (migration 0767). Nome único por organização (lower/btrim). Escrita só pelas rotas /api/v1/attendants/sectors (manager+).';
+  'Setores de atendimento da organização (migration 0801). Nome único por organização (lower/btrim). Escrita só pelas rotas /api/v1/attendants/sectors (manager+).';
 comment on table public.attendant_sector_members is
-  'Vínculo atendente → setor (migration 0767). Um setor por atendente: PK (organization_id, user_id). Apagar o setor solta os atendentes.';
+  'Vínculo atendente → setor (migration 0801). Um setor por atendente: PK (organization_id, user_id). Apagar o setor solta os atendentes.';
 
 notify pgrst, 'reload schema';

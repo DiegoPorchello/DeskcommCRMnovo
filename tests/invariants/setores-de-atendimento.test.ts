@@ -10,7 +10,7 @@ import {
 } from "./gov-helpers";
 
 /**
- * Setores de atendimento (migration 0767) — o que o BANCO segura, sem depender
+ * Setores de atendimento (migration 0801) — o que o BANCO segura, sem depender
  * das rotas:
  *
  *   - `authenticated` só LÊ: nem o manager escreve direto pela REST (a escrita
@@ -63,7 +63,7 @@ beforeAll(async () => {
     [OUTRO_USER],
   );
   await query(
-    "insert into organizations(id,slug,legal_name,display_name) values($1,'setor-outra-0767','Setor Outra','Setor Outra') on conflict(id) do nothing",
+    "insert into organizations(id,slug,legal_name,display_name) values($1,'setor-outra-0801','Setor Outra','Setor Outra') on conflict(id) do nothing",
     [OUTRA_ORG],
   );
   await query(
@@ -79,7 +79,7 @@ beforeEach(async () => {
   await query("delete from attendant_sectors where organization_id = any($1)", [[org, OUTRA_ORG]]);
 });
 
-describe("setores de atendimento (0767)", () => {
+describe("setores de atendimento (0801)", () => {
   it("cada org lê só os próprios setores e vínculos (com controle positivo)", async () => {
     const suporte = await criarSetor(org, "Suporte");
     await criarSetor(OUTRA_ORG, "Comercial");

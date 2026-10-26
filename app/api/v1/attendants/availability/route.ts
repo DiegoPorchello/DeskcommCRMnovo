@@ -12,7 +12,7 @@
  * ela NÃO entra na elegibilidade nem no plantão: `is_available` continua sendo
  * só a decisão, e a jornada continua decidindo o resto (`estaDePlantao`).
  *
- * O SETOR de cada atendente (`sector_id`, migration 0767) vem junto: a tabela
+ * O SETOR de cada atendente (`sector_id`, migration 0801) vem junto: a tabela
  * da Equipe agrupa e filtra por ele, e uma segunda chamada por linha seria o
  * N+1 que o roster existe para evitar. `null` = sem setor.
  *
