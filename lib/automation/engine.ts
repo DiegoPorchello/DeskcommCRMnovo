@@ -26,6 +26,7 @@ import type { EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
 import { evaluateConditions, type Conditions } from "@/lib/automation/conditions";
 import { hidratarCamposDoFunil } from "@/lib/automation/campos-do-render";
 import { getAction } from "@/lib/automation/actions";
+import { falhaDeExecucaoParaRecibo, resultadosParaRecibo } from "@/lib/automation/resultado-para-recibo";
 import type { ActionResultDetail } from "@/lib/automation/types";
 import { audit } from "@/lib/audit";
 import { regraDoEvento } from "@/lib/automation/gatilho-de-data-do-funil";
@@ -381,7 +382,7 @@ async function registrarBloqueioPorLimite(
     event_id: row.id,
     contact_id: contactId,
     status: statusDoRun(results),
-    actions_result: results,
+    actions_result: resultadosParaRecibo(results),
   });
   if (error) {
     logger.error("[automation.engine] não foi possível registrar o bloqueio por contato", {
@@ -673,11 +674,7 @@ export async function runAutomationForEvent(
           ),
         );
       } catch (err) {
-        results.push({
-          type: action.type,
-          status: "failed",
-          error: err instanceof Error ? err.message : String(err),
-        });
+        results.push(falhaDeExecucaoParaRecibo(action.type, err));
       }
     }
 
@@ -729,7 +726,7 @@ export async function runAutomationForEvent(
         // deixa resolvê-lo — e nulo não casa com nada, que é o fail-open.
         contact_id: contatoIdDoEvento,
         status,
-        actions_result: results,
+        actions_result: resultadosParaRecibo(results),
       })
       .select("id")
       .maybeSingle();

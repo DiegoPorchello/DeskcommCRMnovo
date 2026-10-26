@@ -478,3 +478,43 @@ describe("DOIS DRENOS concorrentes do mesmo (regra, contato)", () => {
     expect(linhasDeExecucao(tabelas, CONTATO_A).map((l) => l.status)).toEqual(["success"]);
   });
 });
+
+describe("contraprova sintética de texto pessoal no recibo", () => {
+  it("mensagem lançada pelo provedor não deve permanecer no recibo", async () => {
+    registerAction({
+      type: "prova_erro_pessoal",
+      async execute() {
+        throw new Error("Provedor recusou pessoa.sintetica@example.test; telefone +5511999990000");
+      },
+    });
+    const { cliente, tabelas } = mundo({ uma_vez_por_contato: true }, true, "prova_erro_pessoal");
+    await runAutomationForEvent(cliente, leadCreated(LEAD_A));
+    const linha = linhasDeExecucao(tabelas).at(-1);
+    expect(linha?.status).toBe("failed");
+    expect(JSON.stringify(linha?.actions_result)).not.toContain("pessoa.sintetica@example.test");
+  });
+  it("detail.error retornado pela ação também não deve guardar o texto do provedor", async () => {
+    registerAction({
+      type: "prova_detalhe_pessoal",
+      async execute() {
+        return {
+          type: "prova_detalhe_pessoal",
+          status: "failed",
+          detail: {
+            reason: "whatsapp_falhou",
+            error: "Erro para pessoa.sintetica@example.test; telefone +5511999990000",
+          },
+        };
+      },
+    });
+    const { cliente, tabelas } = mundo(
+      { uma_vez_por_contato: true },
+      true,
+      "prova_detalhe_pessoal",
+    );
+    await runAutomationForEvent(cliente, leadCreated(LEAD_A));
+    const linha = linhasDeExecucao(tabelas).at(-1);
+    expect(linha?.status).toBe("failed");
+    expect(JSON.stringify(linha?.actions_result)).not.toContain("pessoa.sintetica@example.test");
+  });
+});

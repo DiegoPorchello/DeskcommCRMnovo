@@ -48,6 +48,7 @@ export const DICIONARIO: Traducoes = {
   "Adicionar número do remetente": { es: "Añadir número del remitente" },
   "Escolha abaixo um fallback público diferente dos agentes reservados. Salve antes de testar. O teste de classificação de texto não simula o número de origem.": { es: "Elija abajo un agente público de reserva distinto de los agentes reservados. Guarde antes de probar. La prueba de clasificación de texto no simula el número de origen." },
   "Agente por número do remetente": { es: "Agente por número del remitente" },
+  "Não foi possível concluir a ação. Confira o código técnico nos detalhes.": { es: "No se pudo completar la acción. Revisa el código técnico en los detalles." },
   "Mensagens da conversa": { es: "Mensajes de la conversación" },
   "Novas mensagens · Ir para o fim": { es: "Mensajes nuevos · Ir al final" },
   // Versão anterior barrada na prévia (doc de decisão 234): a moldura e as causas de `motivoDoVeto`.

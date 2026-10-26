@@ -1,5 +1,6 @@
 "use client";
 
+import { erroTecnicoConhecido, tipoDeErroConhecido } from "@/lib/automation/resultado-para-recibo";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
@@ -71,6 +72,7 @@ function statusBadgeLabel(status: AutomationRuleRunRow["status"], t: (texto: str
  * que nascem no próprio executor.
  */
 const MOTIVO_DA_PARADA: Record<string, string> = {
+  internal_error: "Não foi possível concluir a ação. Confira o código técnico nos detalhes.",
   no_contact: "Esse lead entrou sem contato vinculado, então não havia para quem escrever.",
   contact_blocked: "O contato pediu para não receber mensagens (opt-out).",
   no_phone: "O contato não tem telefone cadastrado.",
@@ -285,31 +287,18 @@ function explicacaoDe(
 }
 
 /**
- * O detalhe TÉCNICO da execução — a mensagem crua que a ação guardou.
- *
- * ─── DECISÃO DA ISSUE #1090: ele APARECE, para quem dá suporte ──────────────
- *
- * O critério, escrito para quem revisar:
- *
- *   - QUEM LÊ: a aba Atividade é de quem opera a automação dentro do produto,
- *     não é tela de cliente. Para essa pessoa, "não deu para saber quem atende"
- *     sem o motivo é beco sem saída: é a mensagem que separa "a infraestrutura
- *     caiu" (tente de novo) de "o cadastro está errado" (conserte o cadastro), e
- *     é ela que o suporte leva ao time técnico;
- *   - O QUE É: mensagem de erro de infraestrutura que a própria ação capturou
- *     (`TypeError: fetch failed`) — não é dado pessoal nem segredo, e o mesmo
- *     texto já está em `automation_rule_runs.actions_result`, na resposta da API
- *     que a própria tela consome;
- *   - ORDEM E PESO: a frase em português continua sendo a leitura principal —
- *     ela vem primeiro, e o texto técnico vem rotulado e em corpo menor. É o que
- *     impede o detalhe de voltar a ACUSAR a configuração, que foi o defeito
- *     consertado a montante (PR #1010).
- *
- * As duas grafias são aceitas porque as ações usam as duas (`detail.erro` em
- * `assign_owner`, `detail.error` nas demais).
+ * O detalhe técnico continua ajudando o suporte (#1090), com código e classe.
+ * Mensagem livre de provedor pode citar e-mail/telefone (#3267); os novos
+ * recibos passam pelo serializador antes de gravar, preservando motivos e IDs.
+ * As duas grafias legadas (`erro`/`error`) continuam legíveis até o saneamento
+ * do histórico. O texto principal em português permanece antes do detalhe.
  */
 function detalheTecnicoDe(action: AutomationRuleRunActionResult): string | null {
   const detail = action.detail ?? {};
+  if (erroTecnicoConhecido(detail.error_code)) {
+    const classe = tipoDeErroConhecido(detail.error_type) ? detail.error_type : null;
+    return [classe, detail.error_code].filter(Boolean).join(" · ");
+  }
   for (const chave of ["erro", "error"]) {
     const valor = detail[chave];
     if (typeof valor === "string" && valor.trim()) return valor.trim();
