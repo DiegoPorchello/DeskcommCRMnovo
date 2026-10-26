@@ -283,6 +283,11 @@ function explicacaoDe(
   const doErro = typeof action.error === "string" ? action.error : null;
   const motivo = doDetalhe ?? doErro;
   if (motivo && MOTIVO_DA_PARADA[motivo]) return t(MOTIVO_DA_PARADA[motivo]);
+  // Exceção estruturada: o código continua no detalhe para suporte; a leitura
+  // principal não pode virar ECONNRESET no lugar de uma frase para quem opera.
+  if (tipoDeErroConhecido(detail.error_type) && erroTecnicoConhecido(detail.error_code)) {
+    return t(MOTIVO_DA_PARADA.internal_error ?? "Essa ação não funcionou.");
+  }
   return motivo;
 }
 
