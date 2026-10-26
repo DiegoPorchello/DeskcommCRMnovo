@@ -423,6 +423,38 @@ describe("a faixa — sessão sem número não é conexão caída", () => {
     expect(caidas.map((c) => c.id)).toEqual([PAREADA]);
     expect(caidas.every((c) => c.apelido !== "sem nome")).toBe(true);
   });
+
+  it("⭐ canal caído COM apelido e sem número gravado CONTINUA na faixa", async () => {
+    // O outro lado da régua, medido no e2e que derrubou o CI:
+    // `tests/e2e/atender-pelo-celular.spec.ts`, caso A-6 — o teste semeia um
+    // canal `FAILED` com `display_name` e SEM `phone_number` e cobra a faixa
+    // visível. É conexão de alguém: sem número gravado, a faixa é o ÚNICO aviso
+    // que essa queda tem. O fix #3416 cala a linha SEM número E SEM nome (o
+    // caso acima); calar esta também seria trocar um alarme falso por um alarme
+    // apagado.
+    //
+    // Esta asserção não é redundante com a de cima: no CI o defeito de régua
+    // passou batido pelo unit e só o e2e pegou (sabotagem medida: reverter o
+    // filtro para `phone_number` só e o gate local fica rc=0). É por isto que
+    // ela existe — o regresso tem de custar verde AQUI.
+    b.semear("channel_sessions", [
+      linhaSemNumero({
+        id: "66666666-6666-4666-8666-666666666666",
+        status: "FAILED",
+        display_name: "Caído sem número",
+      }),
+    ]);
+
+    const caidas = await listarConexoesCaidas(b.admin as never, ORG);
+
+    expect(caidas).toEqual([
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        apelido: "Caído sem número",
+        status: "FAILED",
+      },
+    ]);
+  });
 });
 
 describe("as cercas do arquivamento", () => {

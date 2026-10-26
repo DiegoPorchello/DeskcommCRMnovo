@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { fecharAvisoDePausaDoCanalArquivado } from "@/lib/channels/central-de-pausa";
 import { resolverSaudeDaConexaoRemovida } from "@/lib/channels/health";
 import { logger } from "@/lib/logger";
 
@@ -115,12 +116,30 @@ export async function descartarSessaoQueNuncaPareou(
       return "preservada";
     }
 
-    // (b) O aviso não fica órfão — mesma chamada e mesmo best-effort da rota
-    // DELETE: uma falha aqui não desfaz o arquivamento, só vai para o log.
+    // (b) O aviso não fica órfão — as MESMAS duas chamadas e o mesmo
+    // best-effort da rota DELETE: saúde e pausa. Uma falha aqui não desfaz o
+    // arquivamento, só vai para o log.
     try {
       await resolverSaudeDaConexaoRemovida(admin, sessao);
     } catch (err) {
       logger.warn("descarte de sessão sem número: não fechei os avisos de saúde", {
+        channel_session_id: sessao.id,
+        organization_id: sessao.organization_id,
+        erro: err instanceof Error ? err.message : String(err),
+      });
+    }
+    try {
+      // A pausa é o aviso que a cerca `arquivar-canal-fecha-aviso-de-pausa`
+      // cobra de todo caminho que grava `archived_at` (#2389): um canal pausado
+      // que some da tela deixaria o item pedindo "retomar" um canal que a tela
+      // já não carrega — o "Este contexto não está disponível para você" do
+      // #1023. Com a linha já arquivada a regra só resolve (`canal_arquivado`).
+      await fecharAvisoDePausaDoCanalArquivado(admin, {
+        id: sessao.id,
+        organization_id: sessao.organization_id,
+      });
+    } catch (err) {
+      logger.warn("descarte de sessão sem número: não fechei o aviso de pausa", {
         channel_session_id: sessao.id,
         organization_id: sessao.organization_id,
         erro: err instanceof Error ? err.message : String(err),

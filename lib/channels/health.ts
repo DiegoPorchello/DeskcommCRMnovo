@@ -208,7 +208,7 @@ export async function listarConexoesCaidas(
     // conexão de ninguém, a mesma faixa permanente do parágrafo acima. Quem não
     // é seed passa por este filtro intacto, inclusive caído.
     .filter((s) => !ehNomeDeSessaoE2E(s.waha_session_name as string | null))
-    // ─── E sessão SEM NÚMERO também não (#3416) ──────────────────────────────
+    // ─── E sessão SEM NÚMERO E SEM NOME também não (#3416) ────────────────────
     //
     // Abriu o QR, não leu, o código expirou: a linha fica `FAILED` sem nunca
     // ter tido telefone, e a faixa dizia "WhatsApp sem nome está desconectado —
@@ -216,11 +216,21 @@ export async function listarConexoesCaidas(
     // número aqui; para quem só olha o produto no teste grátis, isso é um
     // quebrado que não quebrou.
     //
-    // O `phone_number` já vinha no select (é dele que sai o apelido), então o
-    // filtro não custa consulta. Número é a régua: é o que a rota de saúde de
-    // Conexões grava quando a sessão está `WORKING`
+    // As DUAS réguas juntas, e a segunda veio medida no e2e
+    // (`tests/e2e/atender-pelo-celular.spec.ts`, caso A-6): um canal CAÍDO com
+    // apelido e sem número gravado continua sendo conexão de alguém e tem de
+    // aparecer — a faixa é o único aviso dele. O que não é conexão de ninguém é
+    // a linha que não tem nem número (o apelido cairia em "sem nome") nem nome.
+    //
+    // As duas colunas já vinham no select (é delas que sai o apelido), então o
+    // filtro não custa consulta. Número é a régua principal: é o que a rota de
+    // saúde de Conexões grava quando a sessão está `WORKING`
     // (`app/api/v1/channel-sessions/[id]/route.ts`, `numeroObservadoDaSessao`).
-    .filter((s) => Boolean((s.phone_number as string | null)?.trim()))
+    .filter(
+      (s) =>
+        Boolean((s.phone_number as string | null)?.trim()) ||
+        Boolean((s.display_name as string | null)?.trim()),
+    )
     .map((s) => ({
     id: s.id as string,
     apelido: (s.display_name as string | null) ?? (s.phone_number as string | null) ?? "sem nome",
