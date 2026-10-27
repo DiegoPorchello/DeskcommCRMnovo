@@ -237,14 +237,18 @@ test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no a
     return r.data.id as string;
   }
   const funil = await inserir("crm_pipelines", { organization_id: orgId, name: "Avisos sem histórico", slug: `avisos-${randomUUID().replaceAll("-", "")}` });
-  const etapa = await inserir("crm_stages", { organization_id: orgId, pipeline_id: funil, name: "Entrada", slug: "entrada", position: 1 });
+  const etapas = {
+    open: await inserir("crm_stages", { organization_id: orgId, pipeline_id: funil, name: "Entrada", slug: "entrada", position: 1 }),
+    won: await inserir("crm_stages", { organization_id: orgId, pipeline_id: funil, name: "Ganho", slug: "ganho", position: 2, is_won: true }),
+    lost: await inserir("crm_stages", { organization_id: orgId, pipeline_id: funil, name: "Perda", slug: "perda", position: 3, is_lost: true }),
+  };
   const criados: string[] = [];
   await entrar(page, "manager");
   try {
     for (const [status, titulo] of [["open", "Lead atribuído a você"], ["won", "Lead ganho"], ["lost", "Lead perdido"]] as const) {
       const nome = `Primeira mudança ${status} ${randomUUID().slice(0, 8)}`;
       const lead = await inserir("crm_leads", {
-        organization_id: orgId, pipeline_id: funil, stage_id: etapa, title: nome,
+        organization_id: orgId, pipeline_id: funil, stage_id: etapas.open, title: nome,
         owner_user_id: null, status: "open",
       });
       criados.push(lead);
@@ -268,10 +272,13 @@ test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no a
       await expect.poll(() => canalAssinado, { timeout: ESPERA }).toBe(true);
       const consulta = page.waitForResponse(r => r.url().endsWith(`/leads/${lead}/eventos`) && r.request().method() === "GET");
       const mudanca = await db.from("crm_leads").update({
-        owner_user_id: usuarios.manager.id, owner_kind: "user", status,
+        owner_user_id: usuarios.manager.id, owner_kind: "user", stage_id: etapas[status],
         ...(status === "lost" ? { lost_reason: "other" } : {}),
-      }).eq("organization_id", orgId).eq("id", lead).select("updated_at").single();
+      }).eq("organization_id", orgId).eq("id", lead).select("updated_at,status,closed_at").single();
       expect(mudanca.error).toBeNull();
+      expect(mudanca.data?.status).toBe(status);
+      if (status === "open") expect(mudanca.data?.closed_at).toBeNull();
+      else expect(mudanca.data?.closed_at).toEqual(expect.any(String));
       const resposta = await consulta;
       expect(resposta.status()).toBe(200);
       const corpo = await resposta.json() as { data: { eventos: { event_type: string; created_at: string }[] } };
