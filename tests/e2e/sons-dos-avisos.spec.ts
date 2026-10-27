@@ -254,11 +254,10 @@ test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no a
         owner_user_id: null, status: "open",
       });
       criados.push(lead);
-      await page.goto(`/app/pipelines/${funil}`);
-      await expect(page.getByText(nome, { exact: true }).first()).toBeVisible({ timeout: ESPERA });
+      // O socket do documento anterior não pode confirmar a nova navegação.
+      await page.goto("about:blank");
       // Espera o phx_reply do canal exato; um socket aberto não prova assinatura.
       let canalAssinado = false;
-      // A página já está aberta: uma recarga inicia o canal observado do zero.
       page.on("websocket", socket => {
         socket.on("framereceived", frame => {
           try {
@@ -270,7 +269,8 @@ test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no a
           } catch { /* frame sem JSON não é a confirmação esperada */ }
         });
       });
-      await page.reload();
+      await page.goto(`/app/pipelines/${funil}`);
+      await expect(page.getByText(nome, { exact: true }).first()).toBeVisible({ timeout: ESPERA });
       await expect.poll(() => canalAssinado, { timeout: ESPERA }).toBe(true);
       const consulta = page.waitForResponse(r => r.url().endsWith(`/leads/${lead}/eventos`) && r.request().method() === "GET");
       const mudanca = await db.from("crm_leads").update({
