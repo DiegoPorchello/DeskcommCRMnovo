@@ -96,10 +96,10 @@ describe("nomes financeiros no contrato compartilhado com o atendimento", () => 
   it("Faturamento nomeia a pessoa pelo full_name e mantém Sem responsável para null ou desconhecido", async () => {
     const view = await atendimentoNoMesmoCache();
     view.rerender(<Faturamento podeLancar={false} moedaDaOrg="BRL" />);
-    const nome = await screen.findByRole("cell", { name: "Técnica Azul", exact: true });
+    const nome = await screen.findByRole("cell", { name: /^Técnica Azul$/ });
     const tabela = nome.closest("table")!;
     expect(
-      within(tabela).getAllByRole("cell", { name: "Sem responsável", exact: true }),
+      within(tabela).getAllByRole("cell", { name: /^Sem responsável$/ }),
     ).toHaveLength(3);
   });
 });

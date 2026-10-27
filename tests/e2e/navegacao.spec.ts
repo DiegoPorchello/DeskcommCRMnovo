@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { test, expect, type Page } from "./helpers/test";
 
 import { lerCreds, loginComoAdmin, loginComoDono } from "./helpers/login-admin";
-import { afirmarAdminDeTenantPuro } from "./utils/precondicao";
+import { afirmarAdminDeTenantPuro, afirmarDonoDoServidor } from "./utils/precondicao";
 
 let creds = lerCreds();
 const EVIDENCE = path.join(process.cwd(), ".superpowers", "evidence");
@@ -300,7 +300,9 @@ test.describe("navegação agrupada", () => {
     // como a spec de Honorários; instalar no banco efêmero não se desfaz.
     // As specs da PARTE_7 compartilham esse banco: as seguintes verão o módulo
     // instalado. Este caso não mede uma instalação virgem do Financeiro.
-    await loginComoDono(page, lerCreds());
+    const credenciaisDoDono = lerCreds();
+    await afirmarDonoDoServidor(credenciaisDoDono.users.dono!.email);
+    await loginComoDono(page, credenciaisDoDono);
     await page.goto("/admin/modulos");
     const modulo = page.getByTestId("modulo-financeiro");
     await expect(modulo).toBeVisible();
