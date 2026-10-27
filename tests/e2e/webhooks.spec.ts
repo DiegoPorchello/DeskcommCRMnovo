@@ -469,7 +469,14 @@ test.describe("#3267 — uma vez por contato e o mesmo recibo nos dois leitores"
       await Promise.all([page.waitForResponse((r) => r.url().endsWith(`/automation-rules/${regra}`) && r.request().method() === "PATCH"),
         editor.getByRole("button", { name: "Salvar alterações" }).click()]);
       await expect(editor).not.toBeVisible();
+      // O switch marca antes da rede: só a resposta confirma a persistência.
+      const ativacao = page.waitForResponse((r) =>
+        new URL(r.url()).pathname === `/api/v1/automation-rules/${regra}` &&
+        r.request().method() === "PATCH" && r.request().postDataJSON()?.is_active === true);
       await card.getByRole("switch", { name: `Ligar ${nome}` }).click();
+      const respostaAtivacao = await ativacao;
+      expect(respostaAtivacao.status()).toBe(200);
+      expect(await respostaAtivacao.json()).toMatchObject({ data: { is_active: true } });
       await expect(card.getByRole("switch")).toBeChecked();
       const salva = await admin.from("automation_rules").select("trigger_config,is_active").eq("id", regra!).single();
       conferir(salva); expect(salva.data).toMatchObject({ trigger_config: { uma_vez_por_contato: true }, is_active: true });
