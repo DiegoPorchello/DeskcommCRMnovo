@@ -3,8 +3,9 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * GET  /api/v1/attendants/sectors — setores de atendimento da org (qualquer membro).
  * POST /api/v1/attendants/sectors — cria um setor (manager+).
  *
- * A leitura vai pelo client da sessão: a RLS de `attendant_sectors` é
- * org-wide (migration 0801). A escrita vai pelo admin client, porque a tabela
+ * A leitura dos setores vai pelo client da sessão: a RLS de `attendant_sectors`
+ * é org-wide (migration 0801). O contador `member_count` conta só filiação
+ * ativa e por isso lê vínculos e filiações pelo admin client. A escrita vai pelo admin client, porque a tabela
  * não concede escrita a `authenticated` — então a org vem de fonte confiável
  * (activeOrg do cookie) e é filtrada à mão, nunca lida do corpo.
  *
@@ -34,18 +35,29 @@ export async function GET(_req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
+  // O contador conta só filiação ATIVA (`revoked_at is null`), para coincidir
+  // com a aba Atendimento depois de uma revogação: revogar não apaga o vínculo
+  // (só apagar a filiação apaga, pela FK). A RLS de user_organizations mostra a
+  // manager/viewer só a própria linha, então a filiação ativa é lida pelo admin
+  // client, com a org de fonte confiável (activeOrg do cookie) filtrada à mão.
   const supabase = await createClient();
-  const [sectors, members] = await Promise.all([
+  const admin = createAdminClient();
+  const [sectors, members, active] = await Promise.all([
     supabase.from("attendant_sectors").select(SELECT_COLS)
       .eq("organization_id", orgId).order("name", { ascending: true }),
-    supabase.from("attendant_sector_members").select("sector_id")
+    admin.from("attendant_sector_members").select("sector_id, user_id")
       .eq("organization_id", orgId),
+    admin.from("user_organizations").select("user_id")
+      .eq("organization_id", orgId).is("revoked_at", null),
   ]);
   if (sectors.error) return fail("internal_error", sectors.error.message, 500, { requestId });
   if (members.error) return fail("internal_error", members.error.message, 500, { requestId });
+  if (active.error) return fail("internal_error", active.error.message, 500, { requestId });
 
+  const activeUserIds = new Set((active.data ?? []).map((a) => a.user_id));
   const countBySector = new Map<string, number>();
   for (const m of members.data ?? []) {
+    if (!activeUserIds.has(m.user_id)) continue;
     countBySector.set(m.sector_id, (countBySector.get(m.sector_id) ?? 0) + 1);
   }
 
