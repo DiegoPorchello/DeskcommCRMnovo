@@ -203,7 +203,12 @@ import {
   nomesDasFerramentas,
   runBeforeSend,
   tipoDeEnvio,
+  type GateContext,
 } from '../guardrails/before-send';
+// #3333 — o predicado único do efeito, do lado de quem PERGUNTA. Do lado de quem RESPONDE é
+// a ponte das tools MCP (`lib/ai/runtime/tools.ts`), que recebe este mesmo coletor.
+import { criarEfeitoDasEscrituras } from '@/lib/ai/runtime/efeito-das-escritas';
+import { ferramentasDeRegistroDoAgente } from '../guardrails/registro-sem-efeito';
 import { isStatusSendable } from '../../channels/meta/template-binding';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
 import { renderTemplateBody } from '@/lib/channels/meta/render-template';
@@ -3471,6 +3476,22 @@ async function executarTurnoDoAgente(
   // Lido pelo `casePromiseGate` (#1873): true só depois de `schedule_followup` AGENDAR com
   // sucesso neste turno. Libera apenas a promessa de retorno do próprio assistente.
   let followupAgendadoNesteTurno = false;
+  // ── O PREDICADO ÚNICO DO EFEITO (#3333) ────────────────────────────────────────────────
+  //
+  // Uma instância por turno. A ponte das tools MCP (`buildMcpTurnTools` → `pickToolsFromMcp`
+  // → `wrapMcpTool`) anota o desfecho de cada escrita — o MESMO que já vai para o
+  // `api_audit_log` —, e o gate `registro_sem_efeito` pergunta, no momento do envio, se a
+  // ação que a fala anuncia produziu efeito. É o MESMO objeto dos dois lados: não existe
+  // segunda cópia de "deu certo?" em lugar nenhum.
+  //
+  // `active`/`ferramentas` no molde do `agenda` logo abaixo: a família é única
+  // (`ESCRITAS_QUE_REGISTRAM_O_INTERESSE`) e o veto só nomeia ferramenta que o agente TEM.
+  const efeitosDoTurno = criarEfeitoDasEscrituras();
+  const registroDoTurno = (): NonNullable<GateContext['registro']> => {
+    const ferramentas =
+      agentConfig === null ? [] : ferramentasDeRegistroDoAgente(agentConfig.toolIds);
+    return { active: ferramentas.length > 0, ferramentas, efeitos: efeitosDoTurno };
+  };
   const outcomes: ChannelSendResult[] = [];
   // Citações acumuladas por buscas de conhecimento DESTE turno — anexadas à
   // próxima outbound enviada (shape de lib/ai/citations/types, que a UI já lê).
@@ -4087,6 +4108,10 @@ async function executarTurnoDoAgente(
               disponivel: rawTools.schedule_followup !== undefined,
               agendadoNesteTurno: followupAgendadoNesteTurno,
             },
+            // #3333 — o gate lê o predicado único do efeito no momento do envio (as tools do
+            // modelo rodam em passos anteriores do MESMO loop, então o coletor já está certo
+            // aqui). `registroDoTurno()` devolve o MESMO `efeitosDoTurno` que a ponte alimenta.
+            registro: registroDoTurno(),
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }
               : {}),
@@ -4944,7 +4969,9 @@ async function executarTurnoDoAgente(
           },
           configDoTurno,
           runLog,
-          preview ? { readOnly: true } : undefined,
+          // #3333 — o MESMO coletor que o gate lê. A ponte anota o desfecho de cada escrita
+          // (o `success` do audit), e `registroDoTurno()` o entrega ao `before-send`.
+          preview ? { readOnly: true, efeitos: efeitosDoTurno } : { readOnly: false, efeitos: efeitosDoTurno },
         );
         if (mcp !== null) {
           mcpCleanup = mcp.cleanup;
@@ -5036,7 +5063,15 @@ async function executarTurnoDoAgente(
         execute: async () => ({ ok: true, notes: preview.notes ?? [] }),
       };
     const previewContext = preview
-      ? await previewGateContext(pool, preview, runLog, clock())
+      ? {
+          ...(await previewGateContext(pool, preview, runLog, clock())),
+          // #3333 — a MESMA armação do turno real (`registroDoTurno`), e o MESMO coletor que
+          // a ponte das tools alimenta neste turno de prévia. `previewGateContext` monta o
+          // contexto antes de as tools rodarem, então o gate lê o coletor já preenchido no
+          // momento do envio. Sem isto, quem afina o prompt no Testar testaria contra outro
+          // sistema — o mesmo motivo do `agenda` em `preview.ts`.
+          registro: registroDoTurno(),
+        }
       : null;
     const previewTools =
       preview && previewContext
