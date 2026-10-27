@@ -236,7 +236,7 @@ test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no a
     if (r.error) throw r.error;
     return r.data.id as string;
   }
-  const funil = await inserir("crm_pipelines", { organization_id: orgId, name: "Avisos sem histórico", slug: `avisos-${randomUUID()}` });
+  const funil = await inserir("crm_pipelines", { organization_id: orgId, name: "Avisos sem histórico", slug: `avisos-${randomUUID().replaceAll("-", "")}` });
   const etapa = await inserir("crm_stages", { organization_id: orgId, pipeline_id: funil, name: "Entrada", slug: "entrada", position: 1 });
   const criados: string[] = [];
   await entrar(page, "manager");
