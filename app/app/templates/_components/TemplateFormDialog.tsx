@@ -22,7 +22,7 @@ import {
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { MessageTemplate } from "@/hooks/inbox/useMessageTemplates";
-import { TIPOS_DE_RECURSO, type TipoDeRecurso } from "@/lib/inbox/recursos";
+import { lerRespostaRapida } from "@/lib/inbox/resposta-rapida";
 import { useUploadTemplateMedia } from "@/hooks/templates/useUploadTemplateMedia";
 import {
   MAXIMO_DE_MIDIAS,
@@ -62,18 +62,38 @@ interface UpdateInput {
 }
 
 /**
- * O FORMULÁRIO DO RECURSO (#2833 sobre a tela da #2526) — texto ou áudio.
+ * O FORMULÁRIO DA RESPOSTA RÁPIDA (#3009 sobre a tela da #2526/#2833) — texto,
+ * imagem e áudio, cada um OPCIONAL e combinável.
  *
- * O que mudou no redesenho: o ÁUDIO não tem coluna, bucket nem rota próprios.
- * Ele é uma entrada de `midias`, gravada pela MESMA rota que sobe as imagens
- * (`POST /message-templates/:id/midias`), que gera o caminho, fareja os bytes e
- * aplica o teto do tipo. Com isso o formulário também não tem upload paralelo:
- * o arquivo de áudio sobe pelo `useUploadTemplateMedia`, igual a uma imagem.
+ * ─── O que mudou, e por quê ─────────────────────────────────────────────────
  *
- * Consequência de desenho: o TIPO é um modo da TELA. Um recurso de áudio tem
- * exatamente uma entrada de áudio em `midias` e nenhuma imagem; um de texto tem
- * as imagens e nunca áudio. Trocar o modo AFASTA o que não pertence ao modo
- * novo — o PATCH manda a lista completa e a rota apaga do bucket o que saiu.
+ * Havia um seletor de TIPO ("Texto" ou "Áudio") que era um modo do formulário:
+ * no modo texto a mensagem era `required` e não havia campo de áudio; no modo
+ * áudio não havia texto nem imagem. O preço disso, medido contra o que a #3009
+ * pede: só imagem não existia (o texto era obrigatório) e NENHUMA combinação
+ * com áudio existia — texto+áudio, imagem+áudio e texto+imagem+áudio.
+ *
+ * Agora são três seções independentes, na mesma tela, e o que o operador
+ * preencher é o que a resposta leva. O dado não mudou de forma: `body` é o
+ * texto e `midias` é a lista de arquivos (imagem OU áudio), como desde a #2526 —
+ * o que mudou é que o formulário deixou de impor UM modo.
+ *
+ * Quem diz se o conjunto é uma resposta rápida válida é `lerRespostaRapida`
+ * (`lib/inbox/resposta-rapida.ts`): a MESMA régua que a barra do Inbox desenha
+ * e que o envio consulta. Sem ela, três seções independentes permitiriam salvar
+ * uma resposta sem nada — o botão que não prepara nada.
+ *
+ * ─── A ordem das escritas, que continua importando ──────────────────────────
+ *
+ *   CRIAR    primeiro o template, depois os arquivos: a rota de upload precisa
+ *            do id. Se nada subiu e não há texto, a criação é DESFEITA — a
+ *            resposta ficaria vazia na barra (lição da #2833).
+ *   EDITAR   o áudio NOVO sobe antes do PATCH que tira o antigo (lição da
+ *            #2833: upload recusado não pode deixar o recurso sem áudio), e as
+ *            imagens sobem DEPOIS do PATCH que remove (o teto de 5 vale a cada
+ *            upload — #2526). "Sai" é medido contra o que o FORM conhece, não
+ *            contra a prop `template`: no retry depois de um upload que falhou,
+ *            o form já sabe que a imagem removida saiu.
  */
 export function TemplateFormDialog({ open, onOpenChange, canShare, template }: Props) {
   const t = useT();
@@ -87,12 +107,11 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
    * comportamento de quem já usava o produto.
    */
   const [mostrarNaBarra, setMostrarNaBarra] = React.useState(true);
-  const [tipo, setTipo] = React.useState<TipoDeRecurso>("texto");
   // O arquivo de áudio escolhido NESTA edição; quando null, o recurso continua
   // com o áudio que já tem em `midias` (`audioAtual`).
   const [arquivo, setArquivo] = React.useState<File | null>(null);
   /**
-   * As IMAGENS da Resposta rápida (#2526) — três estados, e cada um tem um
+   * As IMAGENS da resposta rápida (#2526) — três estados, e cada um tem um
    * motivo:
    *
    *  `gravadas`  o que JÁ está no bucket e na linha (o template editado). Só as
@@ -147,7 +166,6 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
     setShared(template ? template.owner_user_id === null : false);
     // Ausente = ligado: linha anterior à coluna (e template recém-criado) aparece.
     setMostrarNaBarra(template ? template.mostrar_na_barra !== false : true);
-    setTipo(midiaDeAudioDe(template?.midias) ? "audio" : "texto");
     setArquivo(null);
     setGravadas(((template?.midias ?? []) as MidiaDeTemplate[]).filter((m) => !ehMidiaDeAudio(m)));
     setRemovidas([]);
@@ -155,7 +173,13 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
   }, [open, template]);
 
   const mantidas = gravadas.filter((m) => !removidas.includes(m.storage_path));
-  const total = mantidas.length + novas.length;
+  /**
+   * O TETO DE 5 MÍDIAS (#2526) conta TUDO o que a resposta leva. Desde a #3009 o
+   * áudio é uma mídia como as imagens, não um modo à parte: 5 imagens + 1 áudio
+   * estouraria o CHECK do banco, e a tela tem de dizer isso ANTES do upload.
+   * Áudio escolhido para TROCAR o atual ocupa uma vaga, não duas.
+   */
+  const total = mantidas.length + novas.length + (arquivo || audioAtual ? 1 : 0);
   const estourou = total > MAXIMO_DE_MIDIAS;
 
   /**
@@ -202,7 +226,7 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
     }
     // M4A (o padrão do gravador do iPhone e do Mac) e WebM a rota recusa com
     // 415. Recusar AQUI, antes de o template existir, é o que impede a criação
-    // de deixar uma resposta rápida sem texto e sem áudio.
+    // de deixar uma resposta rápida sem o conteúdo que o operador escolheu.
     if (/^audio\/(mp4|x-m4a|m4a|webm)$/.test(file.type)) {
       toast.error(t("O áudio precisa ser OGG, MP3, AAC, AMR ou WAV."));
       return;
@@ -216,84 +240,90 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Recurso de áudio precisa de um arquivo — o novo desta edição ou o que o
-    // recurso já tem. Sem nenhum dos dois não haveria conteúdo nenhum: nem
-    // texto (o modo áudio não tem campo) nem arquivo.
-    if (tipo === "audio" && !arquivo && !audioAtual) {
-      toast.error(t("Escolha um arquivo de áudio para a resposta rápida."));
+    /**
+     * A RÉGUA, ANTES DE QUALQUER ESCRITA (#3009). As três seções são opcionais,
+     * então o formulário pode chegar aqui sem conteúdo nenhum — e salvar isso
+     * criaria o botão que não prepara nada na barra do Inbox. A contagem sai dos
+     * CAMPOS (no cadastro o template ainda não existe; um arquivo escolhido
+     * ainda é `File`) e a pergunta é a mesma que a barra e o envio fazem.
+     */
+    const leitura = lerRespostaRapida({
+      texto: body,
+      imagens: mantidas.length + novas.length,
+      audios: arquivo || audioAtual ? 1 : 0,
+    });
+    if (!leitura.ok) {
+      toast.error(t(leitura.motivo));
       return;
     }
-    // Recurso de áudio não tem corpo: o conteúdo é o arquivo.
-    const corpo = tipo === "audio" ? "" : body;
 
     try {
       if (isEdit) {
-        // 1) A LISTA FINAL: `[áudio]` no recurso de áudio (vazio enquanto o
-        //    arquivo novo não subiu), as imagens mantidas no de texto. O PATCH
-        //    só manda `midias` quando algo SAI de verdade — reescrever a lista
-        //    sem mudança só arriscaria o `conflict` da tela atrasada. E a
-        //    remoção vem PRIMEIRO pelo mesmo motivo da #2526: o teto de 5 vale
-        //    a cada upload.
-        //
-        //    "Sai" é medido contra o que o FORM conhece (`gravadas` + a entrada
-        //    de áudio), não contra a prop `template`: no retry depois de um
-        //    upload que falhou, o form já sabe que a imagem removida saiu — a
-        //    prop ainda mostra a linha antiga.
-        const listaNova: MidiaDeTemplate[] =
-          tipo === "audio" ? (arquivo ? [] : audioAtual ? [audioAtual] : []) : mantidas;
+        /**
+         * 1) O ÁUDIO NOVO sobe ANTES do PATCH que tira o antigo (#2833): um
+         *    upload recusado tem de deixar o recurso com o áudio que funcionava.
+         *    Só quando há vaga — com a linha cheia o upload daria 422, e aí a
+         *    remoção tem de sair primeiro (é o caso do passo 3).
+         */
         const conhecidas: MidiaDeTemplate[] = audioAtual ? [...gravadas, audioAtual] : gravadas;
-        const sai = conhecidas.filter(
-          (m) => !listaNova.some((k) => k.storage_path === m.storage_path),
-        );
-        // TROCA de áudio: o novo sobe ANTES do PATCH que tira o antigo. Na ordem
-        // inversa, um upload recusado deixava o recurso sem o áudio que
-        // funcionava. A ordem remover-antes (#2526) só é necessária quando o
-        // teto de 5 morderia, o que num recurso de áudio (1 + 1) não acontece.
-        if (tipo === "audio" && arquivo && conhecidas.length < MAXIMO_DE_MIDIAS) {
+        let audioFinal = audioAtual;
+        let audioSubiu = false;
+        if (arquivo && conhecidas.length < MAXIMO_DE_MIDIAS) {
           const lista = await upload.mutateAsync({ templateId: template.id, file: arquivo });
           const nova = lista.find((m) => !conhecidas.some((k) => k.storage_path === m.storage_path));
-          await update.mutateAsync({
-            id: template.id,
-            title,
-            body: corpo,
-            shortcut: shortcut.trim() || null,
-            mostrar_na_barra: mostrarNaBarra,
-            ...(nova ? { midias: [nova] } : {}),
-          });
-          setGravadas([]);
-          setRemovidas([]);
+          audioFinal = nova ?? audioAtual;
           setArquivo(null);
-          toast.success(t("Resposta rápida atualizada."));
-          onOpenChange(false);
-          return;
+          audioSubiu = true;
         }
+
+        /**
+         * 2) O PATCH com a LISTA FINAL — as imagens mantidas mais o áudio (o
+         *    novo ou o que já estava). O que saiu da lista a rota apaga do
+         *    bucket. Sem nada saindo, `midias` nem viaja: reescrever a lista
+         *    sem mudança só arriscaria o `conflict` da tela atrasada.
+         */
+        const listaFinal: MidiaDeTemplate[] = audioFinal ? [...mantidas, audioFinal] : [...mantidas];
+        const sai = conhecidas.filter(
+          (m) => !listaFinal.some((k) => k.storage_path === m.storage_path),
+        );
         await update.mutateAsync({
           id: template.id,
           title,
-          body: corpo,
+          body,
           shortcut: shortcut.trim() || null,
           mostrar_na_barra: mostrarNaBarra,
-          ...(sai.length ? { midias: listaNova } : {}),
+          ...(sai.length ? { midias: listaFinal } : {}),
         });
         if (sai.length) {
-          setGravadas(listaNova.filter((m) => !ehMidiaDeAudio(m)));
+          setGravadas(listaFinal.filter((m) => !ehMidiaDeAudio(m)));
           setRemovidas([]);
         }
-        // 2) O ARQUIVO NOVO sobe pela MESMA rota das imagens (#2833): ela gera
-        //    e confere o caminho, e o teto do áudio é dela. A rota devolve a
-        //    lista completa já gravada.
-        const subir = tipo === "audio" ? (arquivo ? [arquivo] : []) : novas;
-        for (const file of subir) {
+
+        /**
+         * 3) A troca de áudio que não cabia antes (linha cheia) sobe agora, com
+         *    a vaga que o PATCH abriu.
+         */
+        if (arquivo && !audioSubiu) {
+          const lista = await upload.mutateAsync({ templateId: template.id, file: arquivo });
+          setArquivo(null);
+          setGravadas(lista.filter((m) => !ehMidiaDeAudio(m)));
+        }
+
+        /**
+         * 4) As IMAGENS novas, DEPOIS do PATCH que removeu as que saíram: o teto
+         *    de 5 vale a cada upload (#2526). A rota devolve a lista completa, e
+         *    é dela que a tela tira as imagens gravadas.
+         */
+        for (const file of novas) {
           const lista = await upload.mutateAsync({ templateId: template.id, file });
           setGravadas(lista.filter((m) => !ehMidiaDeAudio(m)));
-          if (file === arquivo) setArquivo(null);
           setNovas((atual) => atual.filter((f) => f !== file));
         }
         toast.success(t("Resposta rápida atualizada."));
       } else {
         const criado = await create.mutateAsync({
           title,
-          body: corpo,
+          body,
           shortcut: shortcut.trim() || undefined,
           shared: canShare ? shared : false,
           mostrar_na_barra: mostrarNaBarra,
@@ -302,15 +332,21 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
         // próximo clique criar um segundo. O `finally` fecha mesmo quando o
         // upload falha — a mídia que não subiu entra pela edição, que é onde
         // ela aparece de qualquer forma.
+        const subir = [...novas, ...(arquivo ? [arquivo] : [])];
+        let subiram = 0;
         try {
-          const subir = tipo === "audio" ? (arquivo ? [arquivo] : []) : novas;
           for (const file of subir) {
             await upload.mutateAsync({ templateId: criado.data.id, file });
+            subiram += 1;
           }
         } catch (erro) {
-          // Recurso de áudio sem o áudio não tem conteúdo nenhum: ficaria na
-          // barra do Inbox como um botão vazio. Desfaz a criação.
-          if (tipo === "audio") {
+          /**
+           * Nada subiu e não há texto: a resposta ficaria na barra como um
+           * botão que não prepara nada. Desfaz a criação. Com texto — ou com
+           * algum arquivo já gravado — a resposta VALE, e apagar seria destruir
+           * conteúdo bom por causa de um anexo que falhou.
+           */
+          if (subiram === 0 && body.trim() === "") {
             await apiClient
               .delete(`/api/v1/message-templates/${criado.data.id}`)
               .catch(showApiError);
@@ -339,22 +375,6 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>{t("Tipo de resposta rápida")}</Label>
-            <div className="flex gap-1">
-              {TIPOS_DE_RECURSO.map((opcao) => (
-                <Button
-                  key={opcao}
-                  type="button"
-                  variant={tipo === opcao ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setTipo(opcao)}
-                >
-                  {opcao === "texto" ? t("Texto") : t("Áudio")}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="tpl-title">{t("Título")}</Label>
             <Input
               id="tpl-title"
@@ -366,54 +386,133 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
               required
             />
           </div>
-          {tipo === "texto" ? (
-            <div className="space-y-2">
-              <Label htmlFor="tpl-body">{t("Mensagem")}</Label>
-              <Textarea
-                id="tpl-body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder={t("Oi {{primeiro_nome}}, tudo bem?")}
-                minLength={1}
-                maxLength={4096}
-                required
-                rows={5}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t("Use")} {"{{primeiro_nome}}"} {t("e")} {"{{nome}}"} {t("para personalizar.")}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {t('Para não depender do dado, ponha um texto de reserva: {{primeiro_nome|"aluno"}}.')}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="tpl-audio">{t("Arquivo de áudio")}</Label>
+          {/*
+            TEXTO (#3009) — deixou de ser obrigatório. Era ele que impedia a
+            resposta de SÓ IMAGEM, um dos formatos que a issue pede.
+          */}
+          <div className="space-y-2">
+            <Label htmlFor="tpl-body">{t("Mensagem")}</Label>
+            <Textarea
+              id="tpl-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={t("Oi {{primeiro_nome}}, tudo bem?")}
+              maxLength={4096}
+              rows={5}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("Texto, imagem e áudio são opcionais: preencha o que a resposta leva.")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("Use")} {"{{primeiro_nome}}"} {t("e")} {"{{nome}}"} {t("para personalizar.")}
+            </p>
+          </div>
+          {/*
+            AS IMAGENS (#2526) — o operador carrega as dele, sem depender do
+            catálogo de produtos. Prévia e remoção existem porque a aprovação é
+            dele: o que entra na conversa tem de ser o que ele viu aqui.
+          */}
+          <div className="space-y-2">
+            <Label htmlFor="tpl-midias">{t("Imagens (opcional)")}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t("JPG ou PNG, até 5 MB por imagem. A imagem vai junto com o texto.")}
+            </p>
+            {(mantidas.length > 0 || novas.length > 0) && (
+              <ul className="flex flex-wrap gap-2">
+                {mantidas.map((midia) => (
+                  <li key={midia.storage_path} className="relative">
+                    <img
+                      src={urlDaGravada(midia)}
+                      alt={t("Imagem da resposta rápida")}
+                      className="size-16 rounded-md border border-border object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRemovidas((atual) => [...atual, midia.storage_path])}
+                      aria-label={t("Remover imagem")}
+                      className="absolute -right-1.5 -top-1.5 rounded-full border border-border bg-background p-0.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+                {novas.map((file, i) => (
+                  <li key={`${file.name}-${i}`} className="relative">
+                    <img
+                      src={urlsNovas[i]}
+                      alt={t("Prévia da imagem")}
+                      className="size-16 rounded-md border border-border object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNovas((atual) => atual.filter((_, j) => j !== i))}
+                      aria-label={t("Remover imagem")}
+                      className="absolute -right-1.5 -top-1.5 rounded-full border border-border bg-background p-0.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex items-center gap-2">
               <Input
-                id="tpl-audio"
+                id="tpl-midias"
                 type="file"
-                accept=".ogg,.opus,.mp3,.aac,.amr,.wav"
-                onChange={(e) => escolherAudio(e.target.files)}
-                required={!audioAtual}
+                accept="image/jpeg,image/png"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  escolherArquivos(e.target.files);
+                  // Sem isto, escolher o MESMO arquivo duas vezes seguidas não
+                  // disparava `change` — e a segunda escolha some em silêncio.
+                  e.target.value = "";
+                }}
               />
-              {/* A prévia do áudio ATUAL sai da mesma rota das imagens (por
-                  posição): é o arquivo que o recurso já tem em `midias`. */}
-              {audioAtual && !arquivo && (
-                <audio
-                  controls
-                  preload="none"
-                  src={urlDaGravada(audioAtual)}
-                  className="h-9 w-full"
-                  aria-label={t("Áudio da resposta rápida")}
-                />
+              <Label
+                htmlFor="tpl-midias"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
+              >
+                {t("Adicionar imagem")}
+              </Label>
+              {estourou && (
+                <p className="text-xs text-destructive">
+                  {t("Cada resposta rápida tem no máximo 5 mídias.")}
+                </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                {audioAtual && !arquivo
-                  ? t("Áudio atual mantido. Escolha outro arquivo para substituir.")
-                  : t("O áudio fica na biblioteca e entra no Inbox na fila de anexos, como o `/`.")}
-              </p>
             </div>
-          )}
+          </div>
+          {/*
+            O ÁUDIO (#2833) deixou de ser um MODO e virou uma seção ao lado das
+            outras (#3009): era o modo que impedia texto+áudio, imagem+áudio e
+            texto+imagem+áudio, e é o mesmo arquivo de antes — uma entrada de
+            `midias`, gravada pela MESMA rota das imagens.
+          */}
+          <div className="space-y-2">
+            <Label htmlFor="tpl-audio">{t("Arquivo de áudio")}</Label>
+            <Input
+              id="tpl-audio"
+              type="file"
+              accept=".ogg,.opus,.mp3,.aac,.amr,.wav"
+              onChange={(e) => escolherAudio(e.target.files)}
+            />
+            {/* A prévia do áudio ATUAL sai da mesma rota das imagens (por
+                posição): é o arquivo que o recurso já tem em `midias`. */}
+            {audioAtual && !arquivo && (
+              <audio
+                controls
+                preload="none"
+                src={urlDaGravada(audioAtual)}
+                className="h-9 w-full"
+                aria-label={t("Áudio da resposta rápida")}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              {audioAtual && !arquivo
+                ? t("Áudio atual mantido. Escolha outro arquivo para substituir.")
+                : t("O áudio fica na biblioteca e entra no Inbox na fila de anexos, como o `/`.")}
+            </p>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="tpl-shortcut">{t("Atalho (opcional)")}</Label>
             <Input
@@ -424,83 +523,6 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
               maxLength={40}
             />
           </div>
-          {tipo === "texto" && (
-            /*
-              AS IMAGENS (#2526) — o operador carrega as dele, sem depender do
-              catálogo de produtos. Prévia e remoção existem porque a aprovação
-              é dele: o que entra na conversa tem de ser o que ele viu aqui.
-            */
-            <div className="space-y-2">
-              <Label htmlFor="tpl-midias">{t("Imagens (opcional)")}</Label>
-              <p className="text-xs text-muted-foreground">
-                {t("JPG ou PNG, até 5 MB por imagem. A imagem vai junto com o texto.")}
-              </p>
-              {(mantidas.length > 0 || novas.length > 0) && (
-                <ul className="flex flex-wrap gap-2">
-                  {mantidas.map((midia) => (
-                    <li key={midia.storage_path} className="relative">
-                      <img
-                        src={urlDaGravada(midia)}
-                        alt={t("Imagem da resposta rápida")}
-                        className="size-16 rounded-md border border-border object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setRemovidas((atual) => [...atual, midia.storage_path])}
-                        aria-label={t("Remover imagem")}
-                        className="absolute -right-1.5 -top-1.5 rounded-full border border-border bg-background p-0.5 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="size-3" aria-hidden />
-                      </button>
-                    </li>
-                  ))}
-                  {novas.map((file, i) => (
-                    <li key={`${file.name}-${i}`} className="relative">
-                      <img
-                        src={urlsNovas[i]}
-                        alt={t("Prévia da imagem")}
-                        className="size-16 rounded-md border border-border object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setNovas((atual) => atual.filter((_, j) => j !== i))}
-                        aria-label={t("Remover imagem")}
-                        className="absolute -right-1.5 -top-1.5 rounded-full border border-border bg-background p-0.5 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="size-3" aria-hidden />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex items-center gap-2">
-                <Input
-                  id="tpl-midias"
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  multiple
-                  className="sr-only"
-                  onChange={(e) => {
-                    escolherArquivos(e.target.files);
-                    // Sem isto, escolher o MESMO arquivo duas vezes seguidas não
-                    // disparava `change` — e a segunda escolha some em silêncio.
-                    e.target.value = "";
-                  }}
-                />
-                <Label
-                  htmlFor="tpl-midias"
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
-                >
-                  {t("Adicionar imagem")}
-                </Label>
-                {estourou && (
-                  <p className="text-xs text-destructive">
-                    {t("Cada resposta rápida tem no máximo 5 imagens.")}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
           {canShare && (
             <div className="flex items-center gap-2">
               <Switch
@@ -536,7 +558,7 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t("Cancelar")}
             </Button>
-            <Button type="submit" disabled={pending || (tipo === "texto" && estourou)}>
+            <Button type="submit" disabled={pending || estourou}>
               {isEdit ? t("Salvar") : t("Criar resposta rápida")}
             </Button>
           </DialogFooter>

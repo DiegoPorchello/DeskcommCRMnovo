@@ -11305,6 +11305,21 @@ export const DICIONARIO: Traducoes = {
   "Cada resposta rápida tem no máximo 5 mídias.": {
     es: "Cada respuesta rápida admite un máximo de 5 medios.",
   },
+  // ── Conteúdos independentes da resposta rápida (#3009) ─────────────────────
+  // O texto deixou de ser obrigatório e o áudio deixou de ser um modo: as
+  // frases abaixo são as do formulário e as duas recusas da régua
+  // (`lib/inbox/resposta-rapida.ts`), que a barra, o envio e o cadastro leem.
+  "Texto, imagem e áudio são opcionais: preencha o que a resposta leva.": {
+    es: "El texto, la imagen y el audio son opcionales: completa lo que lleve la respuesta.",
+  },
+  "Resposta rápida de imagem": { es: "Respuesta rápida de imagen" },
+  "Resposta rápida sem conteúdo": { es: "Respuesta rápida sin contenido" },
+  "A resposta rápida não tem conteúdo: escreva um texto, escolha uma imagem ou um áudio.": {
+    es: "La respuesta rápida no tiene contenido: escribe un texto, elige una imagen o un audio.",
+  },
+  "Uma resposta rápida leva no máximo um áudio. O restante vai em texto ou em imagem.": {
+    es: "Una respuesta rápida lleva como máximo un audio. El resto va en texto o en imagen.",
+  },
   "A mídia passou do tamanho máximo aceito.": {
     es: "El medio supera el tamaño máximo aceptado.",
   },

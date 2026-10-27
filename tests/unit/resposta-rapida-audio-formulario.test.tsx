@@ -77,9 +77,15 @@ beforeEach(() => {
 });
 
 describe("resposta rápida de áudio: o formulário não cria o que a rota vai recusar (#2833)", () => {
+  /*
+   * O seletor de modo "Texto"/"Áudio" saiu com a #3009: as três seções
+   * (mensagem, imagens, áudio) convivem no formulário, e o campo de áudio está
+   * sempre na tela. O que estes casos prendem não mudou — M4A recusado antes de
+   * criar, criação desfeita quando nada subiu, áudio novo antes do PATCH que
+   * tira o antigo —, só a navegação até o campo.
+   */
   it("(a) M4A é recusado na escolha: nenhum template é criado", async () => {
     abrir(null);
-    fireEvent.click(screen.getByRole("button", { name: "Áudio" }));
     fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Boas-vindas" } });
     escolherAudio(arquivo("gravacao.m4a", "audio/mp4"));
     fireEvent.submit(screen.getByLabelText("Título").closest("form")!);
@@ -95,7 +101,6 @@ describe("resposta rápida de áudio: o formulário não cria o que a rota vai r
     h.upload.mockRejectedValue(new Error("unsupported_media_type"));
     h.del.mockResolvedValue(undefined);
 
-    fireEvent.click(screen.getByRole("button", { name: "Áudio" }));
     fireEvent.change(screen.getByLabelText("Título"), { target: { value: "Boas-vindas" } });
     escolherAudio(arquivo("voz.ogg", "audio/ogg"));
     fireEvent.submit(screen.getByLabelText("Título").closest("form")!);

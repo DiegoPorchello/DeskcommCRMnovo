@@ -54,6 +54,7 @@ import { cn } from "@/lib/utils";
 import { resolveSharedContact } from "@/lib/messaging/contact-card";
 import { BarraDeRecursos } from "@/components/inbox/composer/BarraDeRecursos";
 import { type Recurso } from "@/lib/inbox/recursos";
+import { lerRespostaRapidaGravada } from "@/lib/inbox/resposta-rapida";
 import type { Message } from "@/lib/types/messaging";
 
 export interface ComposerHandle {
@@ -551,8 +552,27 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
    * Baixar os bytes NA ESCOLHA (e não na hora de enviar) é o que permite
    * preview: sem o Blob não há o que mostrar, e o operador só poderia aprovar
    * às cegas.
+   *
+   * COMBINAÇÕES (#3009) não abriram caminho nenhum: imagem e áudio entram na
+   * MESMA fila, na ordem gravada, e o texto vira legenda do primeiro anexo que
+   * a aceita (imagem sim, áudio não — #3151). Era o que faltava para existir
+   * texto+áudio e imagem+áudio: o áudio deixou de ser um modo do cadastro, e
+   * não precisou de transporte próprio aqui.
    */
   async function applyTemplate(template: Recurso) {
+    // A RÉGUA, antes de qualquer efeito (#3009): uma resposta rápida sem
+    // conteúdo nenhum (corpo em branco e nenhuma mídia) escreveria string vazia
+    // no campo e deixaria o operador achando que escolheu algo. O motivo é da
+    // régua — o mesmo que a barra mostra no `title` do botão e que o cadastro
+    // recusa ao salvar; aqui ele vira aviso, porque o clique não pode acontecer
+    // e sair em silêncio.
+    const leitura = lerRespostaRapidaGravada(template);
+    if (!leitura.ok) {
+      setMenuDismissed(true);
+      toast.error(t(leitura.motivo));
+      return;
+    }
+
     const payload = payloadDeUso(template, contato);
     setMenuDismissed(true);
 
