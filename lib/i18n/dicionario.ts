@@ -11293,6 +11293,9 @@ export const DICIONARIO: Traducoes = {
     es: "audio pendiente; tú decides cuándo enviar",
   },
   "Remover áudio pendente": { es: "Quitar audio pendiente" },
+  "Remover áudio": { es: "Quitar audio" },
+  "Desfazer remoção do áudio": { es: "Deshacer la eliminación del audio" },
+  "O áudio será removido ao salvar.": { es: "El audio se eliminará al guardar." },
   "Não foi possível preparar o áudio do recurso.": {
     es: "No se pudo preparar el audio del recurso.",
   },
@@ -11439,6 +11442,16 @@ export const DICIONARIO: Traducoes = {
   "A imagem precisa ser JPG ou PNG.": { es: "La imagen debe ser JPG o PNG." },
   "Imagem não encontrada.": { es: "Imagen no encontrada." },
   "As imagens mudaram. Recarregue a página.": { es: "Las imágenes cambiaron. Recargue la página." },
+  "As mídias mudaram. Recarregue a página.": { es: "Los archivos cambiaron. Recargue la página." },
+  "Não foi possível confirmar a gravação. Recarregue a página antes de tentar de novo.": {
+    es: "No se pudo confirmar que se guardó. Recargue la página antes de volver a intentarlo.",
+  },
+  "Áudio carregado nesta edição. Escolha outro arquivo para substituir.": {
+    es: "Audio cargado en esta edición. Elija otro archivo para sustituirlo.",
+  },
+  "A resposta já foi criada. Confira a lista antes de tentar novamente.": {
+    es: "La respuesta ya se creó. Revise la lista antes de volver a intentarlo.",
+  },
   "Só manager+ altera template compartilhado.": { es: "Solo manager+ modifica la plantilla compartida." },
   "Apenas versões 'draft' podem ser editadas.": { es: "Solo se pueden editar las versiones 'draft'." },
   "Arquivo acima de 50MB.": { es: "El archivo supera los 50MB." },

@@ -1168,6 +1168,7 @@ jobs:
         qa-agente-usa-as-maos.spec.ts
         qa-selo-no-funil-usado.spec.ts
         qa-telas-descobertas-w4.spec.ts
+        respostas-rapidas-conteudos.spec.ts
         retorno-anti-morte.spec.ts
         traco-do-turno-leitor.spec.ts
         designer-de-automacoes.spec.ts

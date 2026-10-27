@@ -57,6 +57,7 @@ interface UpdateInput {
   body: string;
   shortcut: string | null;
   midias?: MidiaDeTemplate[];
+  midias_esperadas: MidiaDeTemplate[];
   /** "Mostrar na barra do Inbox" (#3282). */
   mostrar_na_barra?: boolean;
 }
@@ -86,10 +87,11 @@ interface UpdateInput {
  * ─── A ordem das escritas, que continua importando ──────────────────────────
  *
  *   CRIAR    primeiro o template, depois os arquivos: a rota de upload precisa
- *            do id. Se nada subiu e não há texto, a criação é DESFEITA — a
- *            resposta ficaria vazia na barra (lição da #2833).
- *   EDITAR   o áudio NOVO sobe antes do PATCH que tira o antigo (lição da
- *            #2833: upload recusado não pode deixar o recurso sem áudio), e as
+ *            do id. Falha de confirmação conserva a linha: um upload pode ter
+ *            persistido mesmo sem entregar a resposta ao formulário. O diálogo
+ *            fecha para que outro clique não crie uma segunda resposta.
+ *   EDITAR   o áudio NOVO substitui o antigo pela mesma rota, inclusive no teto
+ *            de cinco, sem apagar o que funcionava antes do sucesso. As
  *            imagens sobem DEPOIS do PATCH que remove (o teto de 5 vale a cada
  *            upload — #2526). "Sai" é medido contra o que o FORM conhece, não
  *            contra a prop `template`: no retry depois de um upload que falhou,
@@ -110,19 +112,19 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
   // O arquivo de áudio escolhido NESTA edição; quando null, o recurso continua
   // com o áudio que já tem em `midias` (`audioAtual`).
   const [arquivo, setArquivo] = React.useState<File | null>(null);
+  const [removerAudio, setRemoverAudio] = React.useState(false);
   /**
-   * As IMAGENS da resposta rápida (#2526) — três estados, e cada um tem um
+   * A LISTA persistida da resposta rápida e as mudanças ainda pendentes:
    * motivo:
    *
-   *  `gravadas`  o que JÁ está no bucket e na linha (o template editado). Só as
-   *              imagens: a entrada de áudio do recurso não é imagem e não
-   *              entra nesta lista.
+   *  `midiasGravadas` o snapshot completo, atualizado pela resposta de CADA
+   *              escrita. Áudio/preview e o próximo CAS leem essa mesma lista.
    *  `removidas` o que o operador tirou NESTA edição: nada sai do bucket antes
    *              do Salvar — cancelar tem de devolver o template inteiro.
    *  `novas`     os arquivos escolhidos, que só sobem no Salvar (a rota gera o
    *              caminho e devolve a lista gravada).
    */
-  const [gravadas, setGravadas] = React.useState<MidiaDeTemplate[]>([]);
+  const [midiasGravadas, setMidiasGravadas] = React.useState<MidiaDeTemplate[]>([]);
   const [removidas, setRemovidas] = React.useState<string[]>([]);
   const [novas, setNovas] = React.useState<File[]>([]);
 
@@ -135,7 +137,7 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
   });
   const update = useMutation({
     mutationFn: async ({ id, ...input }: UpdateInput) =>
-      apiClient.patch<{ data: MessageTemplate }>(`/api/v1/message-templates/${id}`, input),
+      apiClient.patch<{ data: MessageTemplate & { midias: MidiaDeTemplate[] } }>(`/api/v1/message-templates/${id}`, input),
     onError: showApiError,
     onSuccess: () => qc.invalidateQueries({ queryKey: TEMPLATES_KEY }),
   });
@@ -143,10 +145,8 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
   const pending = create.isPending || update.isPending || upload.isPending;
 
   /** A LISTA da linha, na ordem gravada — a posição é a URL da prévia. */
-  const listaDa = React.useMemo(
-    () => (template?.midias ?? []) as MidiaDeTemplate[],
-    [template],
-  );
+  const listaDa = midiasGravadas;
+  const gravadas = midiasGravadas.filter((m) => !ehMidiaDeAudio(m));
   /** A entrada de áudio do recurso editado, se houver (#2833). */
   const audioAtual = midiaDeAudioDe(listaDa);
 
@@ -167,19 +167,22 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
     // Ausente = ligado: linha anterior à coluna (e template recém-criado) aparece.
     setMostrarNaBarra(template ? template.mostrar_na_barra !== false : true);
     setArquivo(null);
-    setGravadas(((template?.midias ?? []) as MidiaDeTemplate[]).filter((m) => !ehMidiaDeAudio(m)));
+    setRemoverAudio(false);
+    setMidiasGravadas((template?.midias ?? []) as MidiaDeTemplate[]);
     setRemovidas([]);
     setNovas([]);
   }, [open, template]);
 
   const mantidas = gravadas.filter((m) => !removidas.includes(m.storage_path));
+  const outrosAudios = midiasGravadas.filter((m) => ehMidiaDeAudio(m) && m.storage_path !== audioAtual?.storage_path);
+  const audiosFinais = outrosAudios.length + (arquivo || (audioAtual && !removerAudio) ? 1 : 0);
   /**
    * O TETO DE 5 MÍDIAS (#2526) conta TUDO o que a resposta leva. Desde a #3009 o
    * áudio é uma mídia como as imagens, não um modo à parte: 5 imagens + 1 áudio
    * estouraria o CHECK do banco, e a tela tem de dizer isso ANTES do upload.
    * Áudio escolhido para TROCAR o atual ocupa uma vaga, não duas.
    */
-  const total = mantidas.length + novas.length + (arquivo || audioAtual ? 1 : 0);
+  const total = mantidas.length + novas.length + audiosFinais;
   const estourou = total > MAXIMO_DE_MIDIAS;
 
   /**
@@ -250,7 +253,7 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
     const leitura = lerRespostaRapida({
       texto: body,
       imagens: mantidas.length + novas.length,
-      audios: arquivo || audioAtual ? 1 : 0,
+      audios: audiosFinais,
     });
     if (!leitura.ok) {
       toast.error(t(leitura.motivo));
@@ -259,64 +262,57 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
 
     try {
       if (isEdit) {
-        /**
-         * 1) O ÁUDIO NOVO sobe ANTES do PATCH que tira o antigo (#2833): um
-         *    upload recusado tem de deixar o recurso com o áudio que funcionava.
-         *    Só quando há vaga — com a linha cheia o upload daria 422, e aí a
-         *    remoção tem de sair primeiro (é o caso do passo 3).
-         */
-        const conhecidas: MidiaDeTemplate[] = audioAtual ? [...gravadas, audioAtual] : gravadas;
-        let audioFinal = audioAtual;
-        let audioSubiu = false;
-        if (arquivo && conhecidas.length < MAXIMO_DE_MIDIAS) {
-          const lista = await upload.mutateAsync({ templateId: template.id, file: arquivo });
-          const nova = lista.find((m) => !conhecidas.some((k) => k.storage_path === m.storage_path));
-          audioFinal = nova ?? audioAtual;
+        let persistidas = midiasGravadas;
+        const receberLista = (lista: MidiaDeTemplate[]) => {
+          persistidas = lista;
+          setMidiasGravadas(lista);
+        };
+        let audioPendente = arquivo;
+        // A troca é uma única escrita da lista pela rota de upload, mesmo no
+        // teto5. Recusa anterior à escrita conserva a versão anterior; perda
+        // da confirmação exige recarregar, sem apagar objetos por hipótese.
+        if (audioPendente && audioAtual) {
+          receberLista(await upload.mutateAsync({
+            templateId: template.id,
+            file: audioPendente,
+            midiasEsperadas: persistidas,
+            substituirAudio: audioAtual.storage_path,
+          }));
           setArquivo(null);
-          audioSubiu = true;
+          setRemoverAudio(false);
+          audioPendente = null;
         }
 
-        /**
-         * 2) O PATCH com a LISTA FINAL — as imagens mantidas mais o áudio (o
-         *    novo ou o que já estava). O que saiu da lista a rota apaga do
-         *    bucket. Sem nada saindo, `midias` nem viaja: reescrever a lista
-         *    sem mudança só arriscaria o `conflict` da tela atrasada.
-         */
-        const listaFinal: MidiaDeTemplate[] = audioFinal ? [...mantidas, audioFinal] : [...mantidas];
-        const sai = conhecidas.filter(
-          (m) => !listaFinal.some((k) => k.storage_path === m.storage_path),
+        const listaFinal = persistidas.filter((m) =>
+          !removidas.includes(m.storage_path) &&
+          !(removerAudio && !arquivo && m.storage_path === audioAtual?.storage_path),
         );
-        await update.mutateAsync({
+        const resposta = await update.mutateAsync({
           id: template.id,
           title,
           body,
           shortcut: shortcut.trim() || null,
           mostrar_na_barra: mostrarNaBarra,
-          ...(sai.length ? { midias: listaFinal } : {}),
+          midias_esperadas: persistidas,
+          ...(listaFinal.length !== persistidas.length ? { midias: listaFinal } : {}),
         });
-        if (sai.length) {
-          setGravadas(listaFinal.filter((m) => !ehMidiaDeAudio(m)));
-          setRemovidas([]);
-        }
+        receberLista(resposta.data.midias);
+        setRemovidas([]);
+        setRemoverAudio(false);
 
-        /**
-         * 3) A troca de áudio que não cabia antes (linha cheia) sobe agora, com
-         *    a vaga que o PATCH abriu.
-         */
-        if (arquivo && !audioSubiu) {
-          const lista = await upload.mutateAsync({ templateId: template.id, file: arquivo });
+        // Sem áudio anterior, o PATCH pode abrir a vaga de uma imagem removida.
+        if (audioPendente) {
+          receberLista(await upload.mutateAsync({
+            templateId: template.id, file: audioPendente, midiasEsperadas: persistidas,
+          }));
           setArquivo(null);
-          setGravadas(lista.filter((m) => !ehMidiaDeAudio(m)));
         }
 
-        /**
-         * 4) As IMAGENS novas, DEPOIS do PATCH que removeu as que saíram: o teto
-         *    de 5 vale a cada upload (#2526). A rota devolve a lista completa, e
-         *    é dela que a tela tira as imagens gravadas.
-         */
+        // Cada upload usa a resposta do anterior, inclusive no retry parcial.
         for (const file of novas) {
-          const lista = await upload.mutateAsync({ templateId: template.id, file });
-          setGravadas(lista.filter((m) => !ehMidiaDeAudio(m)));
+          receberLista(await upload.mutateAsync({
+            templateId: template.id, file, midiasEsperadas: persistidas,
+          }));
           setNovas((atual) => atual.filter((f) => f !== file));
         }
         toast.success(t("Resposta rápida atualizada."));
@@ -333,26 +329,20 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
         // upload falha — a mídia que não subiu entra pela edição, que é onde
         // ela aparece de qualquer forma.
         const subir = [...novas, ...(arquivo ? [arquivo] : [])];
-        let subiram = 0;
+        let persistidas = criado.data.midias ?? [];
         try {
           for (const file of subir) {
-            await upload.mutateAsync({ templateId: criado.data.id, file });
-            subiram += 1;
+            persistidas = await upload.mutateAsync({
+              templateId: criado.data.id, file, midiasEsperadas: persistidas,
+            });
           }
         } catch (erro) {
-          /**
-           * Nada subiu e não há texto: a resposta ficaria na barra como um
-           * botão que não prepara nada. Desfaz a criação. Com texto — ou com
-           * algum arquivo já gravado — a resposta VALE, e apagar seria destruir
-           * conteúdo bom por causa de um anexo que falhou.
-           */
-          if (subiram === 0 && body.trim() === "") {
-            await apiClient
-              .delete(`/api/v1/message-templates/${criado.data.id}`)
-              .catch(showApiError);
-          }
+          toast.error(t("A resposta já foi criada. Confira a lista antes de tentar novamente."));
           throw erro;
         } finally {
+          // Ausência de confirmação não prova ausência de conteúdo. Inclusive
+          // um 409 pode ter preservado a mídia de outro escritor. Sem rollback
+          // atômico comprovado, conservar é preferível a apagar essa referência.
           qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
           onOpenChange(false);
         }
@@ -498,7 +488,7 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
             />
             {/* A prévia do áudio ATUAL sai da mesma rota das imagens (por
                 posição): é o arquivo que o recurso já tem em `midias`. */}
-            {audioAtual && !arquivo && (
+            {audioAtual && !arquivo && !removerAudio && (
               <audio
                 controls
                 preload="none"
@@ -507,10 +497,18 @@ export function TemplateFormDialog({ open, onOpenChange, canShare, template }: P
                 aria-label={t("Áudio da resposta rápida")}
               />
             )}
+            {audioAtual && !arquivo && (
+              <Button type="button" variant="ghost" size="sm" disabled={pending}
+                onClick={() => setRemoverAudio((atual) => !atual)}>
+                {removerAudio ? t("Desfazer remoção do áudio") : t("Remover áudio")}
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
-              {audioAtual && !arquivo
-                ? t("Áudio atual mantido. Escolha outro arquivo para substituir.")
-                : t("O áudio fica na biblioteca e entra no Inbox na fila de anexos, como o `/`.")}
+              {removerAudio && !arquivo
+                ? t("O áudio será removido ao salvar.")
+                : audioAtual && !arquivo
+                  ? t("Áudio carregado nesta edição. Escolha outro arquivo para substituir.")
+                  : t("O áudio fica na biblioteca e entra no Inbox na fila de anexos, como o `/`.")}
             </p>
           </div>
           <div className="space-y-2">
