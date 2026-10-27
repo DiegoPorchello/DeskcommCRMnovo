@@ -35,13 +35,19 @@ O conjunto focado passou com 82 casos em sete arquivos, um worker. A prova
 controlada complementa os testes puros e as cercas de fonte do autor; não
 substitui o CI do head publicado nem mede um turno completo com modelo.
 
-A prova visual específica está preparada no caso existente “o papel que confere
+A prova visual específica passou no caso existente “o papel que confere
 mostra a lista inteira, aberta, e sem interruptor decorativo”, em
-`agente-papeis-operador.spec.ts` (parte 1 do CI). O caso usa o login e o agente
-semeado reais da spec, confere a linha, o motivo fixo e zero interruptores, e
-salva `evidence/registro-no-envio/linha-fixa.png` após as asserções. Não usa
-`page.route`. A coleta local não executa login, seed nem navegador; a imagem
-ainda depende da execução do novo head pelo CI.
+`agente-papeis-operador.spec.ts`, no [job da parte 1](https://github.com/melgarafael/DeskcommCRM/actions/runs/40499697633/job/122174067862)
+do head `1041c3e7`: 1,9 segundo, com login e agente semeado reais. O caso
+confere a linha, o motivo fixo e zero interruptores, sem `page.route`.
+
+A captura real da linha fixa está em `evidence/registro-no-envio/linha-fixa.png`.
+
+O PNG é a captura original do elemento após as asserções, sem edição. O
+[recibo de origem](../../evidence/registro-no-envio/origem.json) registra head,
+checkout, run, job, artefato e SHA256. A imagem prova a linha renderizada;
+não mede um turno completo nem efeito por objeto. Os cinco checks do próximo
+head continuam necessários; o verde desta parte não encerra a composição.
 
 ## Lacuna mantida na issue
 
