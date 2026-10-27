@@ -46,9 +46,9 @@ import {
  *
  * ─── O contato só é buscado quando há atalho ────────────────────────────────
  *
- * O dossiê do quadro recebe o `settings` do funil pelo cache, mas o telefone e o
- * e-mail vêm de `contacts` — e um GET por card aberto, em funil sem atalho
- * nenhum, seria rede paga para desenhar nada. O gancho condicional mora num
+ * A lista vem por prop (o quadro, a lista e o calendário já têm o funil em mão),
+ * mas o telefone e o e-mail vêm de `contacts` — e um GET por card aberto, em
+ * funil sem atalho nenhum, seria rede paga para desenhar nada. O gancho condicional mora num
  * componente INTERNO (`ComContato`) que só é montado quando a lista tem item:
  * a regra dos hooks é respeitada por construção, não por sorte.
  */
