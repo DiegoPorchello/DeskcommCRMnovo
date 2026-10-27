@@ -343,7 +343,7 @@ test.describe("navegação agrupada", () => {
     await expect(page.getByText("Algo deu errado", { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(inicioDoDocumento);
     await page.screenshot({
-      path: path.join(EVIDENCE, "nav-inbox-financeiro-equipe.png"),
+      path: path.join("evidence", "financeiro-cache", "nav-inbox-financeiro-equipe.png"),
       fullPage: true,
     });
 
@@ -375,7 +375,7 @@ test.describe("navegação agrupada", () => {
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(inicioDoDocumento);
     expect(erros).toEqual([]);
     await page.screenshot({
-      path: path.join(EVIDENCE, "nav-inbox-faturamento-equipe.png"),
+      path: path.join("evidence", "financeiro-cache", "nav-inbox-faturamento-equipe.png"),
       fullPage: true,
     });
   });
