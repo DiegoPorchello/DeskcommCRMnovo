@@ -4058,28 +4058,38 @@ substitui os cinco checks obrigatórios: o verify antigo falhou no teste de
 relógio, cujo reparo central entra pela composição da main, sem repetir a rodada antiga.
 ## Transcrição pelo serviço da OpenRouter — adaptação #3408 (2026-10-27)
 
-**Prova preparada, ainda não executada.** O caso de `atender-pelo-celular.spec.ts`
-usa um tenant sintético próprio, credencial cifrada pelo helper canônico e áudio
-OGG/Opus válido, gerado pelo ffmpeg já instalado na parte 6 do CI. O processor de
-entrada emite os eventos reais; os handlers de persistência e derivação leem
-esses eventos e usam banco/Storage reais. Somente os servidores HTTP de origem
-da mídia e do fornecedor de transcrição são sintéticos, locais e explícitos.
+**Prova real confirmada no head `081d4b2a`.** A
+[parte 6 do CI de 2026-10-27](https://github.com/melgarafael/DeskcommCRM/actions/runs/40451116611/job/122021774747)
+passou os 87 casos; o caso próprio de STT concluiu em 6,0s, sobre o checkout de
+merge `988212603648ff7f5bacc2a045e66302927aa1d1`. PNG e recibo físico foram
+baixados e inspecionados. Essa prova fica distinta do E2E global, que falhou
+na parte 1 no passo herdado de prova do hotfix. O novo candidato compõe o
+reparo dessa bancada e do catálogo por merge normal do #3544; seus checks
+próprios ainda precisam confirmar o conjunto.
 
-O caso confere bytes no Storage, multipart com arquivo/modelo/idioma, transcrição
-`ready`, texto e uma linha de custo informada em USD pelo fornecedor sintético.
-Um controle recusa redirecionamento a outro destino pelo egress canônico, sem
-requisição ao destino recusado. O painel é aberto por um manager, só para ler o
-anúncio do mesmo degrau e modelo escolhido pelo worker; a captura vem após as
-assertivas. O recibo físico contém apenas indicadores e medidas, sem chave ou URL.
+O caso de `atender-pelo-celular.spec.ts` usa tenant sintético próprio,
+credencial cifrada pelo helper canônico e OGG/Opus válido gerado pelo ffmpeg
+da parte 6. Processor de entrada, eventos persistidos, handlers de persistência
+e derivação, banco e Storage são reais. Somente os servidores HTTP de origem
+da mídia e do fornecedor são sintéticos, locais e explícitos. O transporte
+continua passando pelo egress canônico; fetch global não foi substituído.
 
-O teste unitário cobre o limite multipart de 25 MB somente neste fornecedor,
-ausência/invalidade do custo e erro/rejeição da gravação do estado terminal. O
-teto global de mídia permanece 50 MiB. A guarda atual de organização do worker
-foi composta por merge do hotfix #3544 e continua antes dos efeitos privilegiados.
+O JSON confirmou bytes iguais no Storage, multipart com arquivo/modelo/idioma,
+texto e estado `ready`, e custo informado de 0,0508 centavos persistido. Houve
+uma chamada positiva e um controle de redirecionamento recusado, com zero
+requisições ao destino recusado. O controle do conversor antigo recusou OGG
+antes do HTTP. O PNG mostra um manager lendo no painel o anúncio do modelo e
+a razão da escolha; não mede edição de credencial. O recibo contém apenas
+indicadores e medidas, sem chave ou URL. Os recursos próprios foram limpos.
+
+Os unitários cobrem 25 MB somente nesse fornecedor, ausência/invalidade do custo
+e erro/rejeição da gravação do estado terminal. O teto global continua 50 MiB.
+A guarda atual do worker e seu tratamento terminal foram preservados; o reparo
+da bancada não altera o produto STT já provado neste head.
 
 **Limites:** não mede aceitação, qualidade ou latência da OpenRouter pública,
-pareamento do WhatsApp, webhook HTTP/HMAC, agendador ou turno do agente. Os
-handlers são chamados sobre os eventos da própria mensagem; não se drena a fila
-global para a prova. Não houve provedor pago nem runtime/DB/browser local. Coleta
-e testes unitários não contam como execução dessa jornada. Os recursos próprios
-são removidos ao terminar; o aceite depende do CI e da inspeção de seus artefatos.
+pareamento WhatsApp, webhook HTTP/HMAC, agendador ou turno do agente. Handlers
+são chamados sobre os eventos da própria mensagem, sem drenar a fila global.
+Não houve provedor pago nem runtime/DB/browser local. Coleta e unidades não
+contam como execução dessa jornada. O aceite do conjunto depende dos cinco
+checks obrigatórios e da inspeção dos novos artefatos.
