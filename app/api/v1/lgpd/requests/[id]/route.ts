@@ -27,6 +27,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,10 @@ export async function GET(
     .maybeSingle();
 
   if (reqErr) {
-    return fail("internal_error", reqErr.message, 500, { requestId });
+    logger.warn("[lgpd-request-detail] request unavailable", {
+      code: "request_read_failed", requestId,
+    });
+    return fail("internal_error", t("Erro interno. Tente de novo em instantes."), 500, { requestId });
   }
   if (!request) {
     return fail("not_found", t("Solicitação não encontrada."), 404, { requestId });
@@ -103,7 +107,9 @@ export async function GET(
 
   if (auditErr) {
     // Non-fatal — return empty trail
-    console.error("[lgpd-request-detail] audit_log fetch error", auditErr.message);
+    logger.warn("[lgpd-request-detail] audit trail unavailable", {
+      code: "audit_read_failed", requestId,
+    });
   }
 
   const audit_trail = auditRows ?? [];
@@ -122,16 +128,29 @@ export async function GET(
     // do PDF.
     const jsonPath = typeof result.json_path === "string" ? result.json_path : null;
 
-    const assinar = async (caminho: string, rotulo: string): Promise<string | null> => {
-      const { data: signedData, error: signErr } = await admin.storage
-        .from("lgpd-exports")
-        .createSignedUrl(caminho, 72 * 60 * 60); // 72h in seconds
-
-      if (signErr) {
-        console.error(`[lgpd-request-detail] signed URL error (${rotulo})`, signErr.message);
+    const assinar = async (caminho: string, rotulo: "pdf" | "json"): Promise<string | null> => {
+      // A service role ignora a policy do bucket: assina apenas a estrutura
+      // literal emitida pelo worker para ESTA organização e ESTE pedido.
+      const nome = rotulo === "pdf" ? "report.pdf" : "data.json";
+      if (caminho !== `${orgId}/${request.id}/${nome}`) {
+        logger.warn("[lgpd-request-detail] artifact unavailable", {
+          code: "artifact_path_mismatch", artifact: rotulo, requestId,
+        });
         return null;
       }
-      return signedData?.signedUrl ?? null;
+      try {
+        const { data: signedData, error: signErr } = await admin.storage
+          .from("lgpd-exports")
+          // O atributo HTML download sozinho não cobre Storage cross-origin.
+          .createSignedUrl(caminho, 72 * 60 * 60, { download: nome });
+        if (!signErr && signedData?.signedUrl) return signedData.signedUrl;
+      } catch {
+        // Uma exceção neste arquivo não impede a assinatura do outro.
+      }
+      logger.warn("[lgpd-request-detail] artifact unavailable", {
+        code: "artifact_sign_failed", artifact: rotulo, requestId,
+      });
+      return null;
     };
 
     if (pdfPath) signed_pdf_url = await assinar(pdfPath, "pdf");
