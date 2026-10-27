@@ -4,9 +4,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 import { test, expect, esperarARevelacao } from "./helpers/test";
+import { finalizarProvaComEvidencia } from "./helpers/finalizar-prova-com-evidencia";
 import { destinoEhLocal } from "../../scripts/lib/env-de-teste";
 import { midiaPertenceAoTemplate, type MidiaDeTemplate } from "../../lib/templates/midias";
 import { isMediaPathInOrganization, isMediaPathOwnedBy } from "../../lib/messaging/media/upload-validation";
@@ -44,8 +45,11 @@ const COMBINACOES = [
   { tipo: "texto+imagem+audio", texto: true, imagem: true, audio: true },
 ] as const;
 
-test("sete combinações e edição de áudio no teto5 conservam bytes e snapshot", async ({ page, baseURL }) => {
+test("sete combinações e edição de áudio no teto5 conservam bytes e snapshot", async ({ page, baseURL }, testInfo) => {
   test.setTimeout(300_000);
+  page.setDefaultTimeout(10_000);
+  page.setDefaultNavigationTimeout(20_000);
+  const inicio = performance.now();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -55,8 +59,18 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
   for (const alvo of [baseURL!, url, receptorUrl, dbUrl, process.env.SUPABASE_SERVER_URL || url]) {
     expect(destinoEhLocal(alvo), "a prova exige destinos locais").toBe(true);
   }
-  const admin = createClient(url, serviceRole, { auth: { persistSession: false, autoRefreshToken: false } });
-  const sessao = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  let sinalDaLimpeza: AbortSignal | undefined;
+  const fetchComPrazo: typeof fetch = (alvo, opcoes) => fetch(alvo, {
+    ...opcoes,
+    signal: AbortSignal.any([AbortSignal.timeout(10_000),
+      ...(opcoes?.signal ? [opcoes.signal] : []), ...(sinalDaLimpeza ? [sinalDaLimpeza] : [])]),
+  });
+  // Só os clientes desta bancada: prazo inclui Auth/Storage e não repete uma
+  // falha transitória durante a limpeza. O transporte do app continua real.
+  const opcoes = { auth: { persistSession: false, autoRefreshToken: false },
+    db: { timeout: 10_000, retry: false }, global: { fetch: fetchComPrazo } };
+  const admin = createClient(url, serviceRole, opcoes);
+  const sessao = createClient(url, anon, opcoes);
   const sufixo = randomUUID().slice(0, 8);
   const nomeDaSessao = `rr-3538-${sufixo}`;
   const email = `rr-3538-${sufixo}@invariant.test`;
@@ -73,8 +87,25 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     bytesReais: false, trocaNoTeto: false, trocaComImagemRemovida: false, recusaConservaAnterior: false,
     remocaoReversivel: false, snapshotObsoletoRecusado: false, outroTenantRecusado: false,
     limpezaRestritaAoRecurso: false, jsonbMalformadoRecusado: false,
-    limpeza: false, falhasDeLimpeza: 0,
+    limpeza: false, falhasDeLimpeza: 0, limpezaInterrompida: false,
+    estadoDaLimpeza: "pendente", falhaNaCaptura: false,
+    preparoMs: 0, execucaoMs: 0, limpezaMs: 0,
     fornecedor: "HTTP local sintético; não mede conversão/entrega do WhatsApp público" };
+
+  async function capturar(nome: string) {
+    const arquivo = path.join(pasta, nome);
+    await page.screenshot({ path: arquivo, fullPage: true, timeout: 5_000 });
+    // O artefato de falha do workflow já recolhe os anexos Playwright. O anexo
+    // via path é copiado para test-results mesmo com reporter=list; nenhuma
+    // URL assinada entra como texto nem depende de um reporter HTML.
+    await testInfo.attach(nome, { path: arquivo, contentType: "image/png" });
+  }
+  async function guardarRecibo(nome: string) {
+    const body = Buffer.from(JSON.stringify(recibo, null, 2));
+    const arquivo = path.join(pasta, nome);
+    writeFileSync(arquivo, body);
+    await testInfo.attach(nome, { path: arquivo, contentType: "application/json" });
+  }
 
   const receptor = createServer((req, res) => {
     void (async () => {
@@ -108,15 +139,20 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
           : { id: `rr-${randomUUID()}`, name: nomeDaSessao, status: "WORKING" }));
     })().catch(() => {
       falhaDoReceptor = true;
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end('{"error":"contrato_sintetico_recusado"}');
+      if (!res.destroyed && !res.writableEnded) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end('{"error":"contrato_sintetico_recusado"}');
+      }
     });
   });
+  receptor.requestTimeout = 10_000;
+  receptor.headersTimeout = 5_000;
+  receptor.setTimeout(10_000);
 
   async function inserir(tabela: string, dados: Record<string, unknown>): Promise<string> {
     const r = await admin.from(tabela).insert(dados).select("id").single();
-    expect(r.error === null, `fixture ${tabela} recusada`).toBe(true);
-    return r.data.id as string;
+    expect(r.error === null && Boolean(r.data), `fixture ${tabela} recusada`).toBe(true);
+    return r.data!.id as string;
   }
   async function ler(id: string): Promise<Modelo> {
     const r = await sessao.from("message_templates").select("*").eq("id", id).eq("organization_id", org).single();
@@ -160,8 +196,12 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
   try {
     const destino = new URL(receptorUrl);
     await new Promise<void>((resolve, reject) => {
-      receptor.once("error", reject);
-      receptor.listen(Number(destino.port), destino.hostname.replace(/^\[|\]$/g, ""), resolve);
+      const abertura = new AbortController();
+      const timer = setTimeout(() => { abertura.abort(); reject(new Error("receiver_listen_timeout")); }, 5_000);
+      receptor.once("error", (error) => { clearTimeout(timer); reject(error); });
+      receptor.listen({ port: Number(destino.port), host: destino.hostname.replace(/^\[|\]$/g, ""), signal: abertura.signal }, () => {
+        clearTimeout(timer); resolve();
+      });
     });
     const conta = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true });
     expect(conta.error === null && Boolean(conta.data.user), "conta sintética recusada").toBe(true);
@@ -189,13 +229,14 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     await page.getByLabel(/senha/i).fill(senha);
     await page.getByRole("button", { name: "Entrar", exact: true }).click();
     await page.waitForURL(/\/app(\/|$)/);
+    recibo.preparoMs = Math.round(performance.now() - inicio);
 
     // As três etapas abaixo usam serviços reais; o recibo distingue cada uma.
     // Nenhum page.route, dublê de Storage ou fetch global é instalado.
     const cadastrados: Modelo[] = [];
     for (const [i, c] of COMBINACOES.entries()) cadastrados.push(await cadastrar(`RR ${i + 1} ${sufixo}`, c.texto ? `Texto sintético ${i + 1}` : "", Number(c.imagem), c.audio));
     recibo.seteCadastros = true;
-    await page.screenshot({ path: path.join(pasta, "biblioteca-sete-conteudos.png"), fullPage: true });
+    await capturar("biblioteca-sete-conteudos.png");
 
     recibo.fase = "isolamento-das-fixtures";
     outraOrg = await inserir("organizations", { slug: `e2e-rr-b-${sufixo}`, display_name: "Outra organização sintética",
@@ -212,10 +253,12 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     expect(invisivel.error === null).toBe(true);
     expect(invisivel.data).toEqual([]);
     const outroUpload = await page.request.post(`/api/v1/message-templates/${outroId}/midias`, {
+      timeout: 10_000,
       multipart: { file: { name: "Outro.wav", mimeType: "audio/wav", buffer: wav }, substituir_audio: outroPath },
     });
     expect(outroUpload.status()).toBe(404);
     const alvoAlheio = await page.request.post(`/api/v1/message-templates/${cadastrados[2]!.id}/midias`, {
+      timeout: 10_000,
       multipart: { file: { name: "Outro.wav", mimeType: "audio/wav", buffer: wav }, substituir_audio: outroPath },
     });
     expect(alvoAlheio.status()).toBe(409);
@@ -235,6 +278,7 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     expect(escritaJwt.error === null && escritaJwt.count === 1).toBe(true);
     expect(escritaJwt.data?.midias).toEqual(alteradas);
     const reparo = await page.request.patch(`/api/v1/message-templates/${paraReparar.id}`, {
+      timeout: 10_000,
       data: { midias: [], midias_esperadas: alteradas },
     });
     expect(reparo.status()).toBe(200);
@@ -252,8 +296,9 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
         .eq("id", paraReparar.id).eq("organization_id", org).select("midias").single();
       expect(escrita.error === null && escrita.count === 1).toBe(true);
       expect(escrita.data?.midias).toEqual(malformada);
-      expect((await page.request.patch(`/api/v1/message-templates/${paraReparar.id}`, { data: { midias: [] } })).status()).toBe(409);
+      expect((await page.request.patch(`/api/v1/message-templates/${paraReparar.id}`, { timeout: 10_000, data: { midias: [] } })).status()).toBe(409);
       expect((await page.request.post(`/api/v1/message-templates/${paraReparar.id}/midias`, {
+        timeout: 10_000,
         multipart: { file: { name: "Imagem.png", mimeType: "image/png", buffer: PNG } },
       })).status()).toBe(409);
       const depois = await sessao.from("message_templates").select("midias").eq("id", paraReparar.id).single();
@@ -282,6 +327,7 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
       expect(r.data).toEqual([]);
     }
     const nulo = await page.request.post(`/api/v1/message-templates/${vazio.id}/midias`, {
+      timeout: 10_000,
       multipart: { file: { name: "Imagem.png", mimeType: "image/png", buffer: PNG }, midias_esperadas: "null" },
     });
     expect(nulo.status()).toBe(422);
@@ -303,6 +349,7 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     expect(igualdade.error === null).toBe(true);
     expect(igualdade.data?.midias).toEqual(cheio.midias);
     const obsoleto = await page.request.patch(`/api/v1/message-templates/${cheio.id}`, {
+      timeout: 10_000,
       data: { midias: snapshot.slice(1), midias_esperadas: snapshot },
     });
     expect(obsoleto.status()).toBe(409);
@@ -318,11 +365,14 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
       return r.data?.length ?? 0;
     };
     expect(await quantidadeDeObjetos()).toBe(5);
-    const pool = new Pool({ connectionString: dbUrl, max: 1 });
-    const lock = await pool.connect();
+    const pool = new Pool({ connectionString: dbUrl, max: 1, connectionTimeoutMillis: 5_000,
+      query_timeout: 10_000, statement_timeout: 10_000, lock_timeout: 5_000,
+      idle_in_transaction_session_timeout: 45_000 });
+    let lock: PoolClient | undefined;
     let transacao = false;
     let pedido: ReturnType<typeof page.request.post> | undefined;
     try {
+      lock = await pool.connect();
       await lock.query("begin"); transacao = true;
       await lock.query("select id from public.message_templates where id=$1 and organization_id=$2 for update", [cheio.id, org]);
       const audioAnterior = cheio.midias.find((m) => m.storage_path.endsWith(".wav"))!;
@@ -340,15 +390,27 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
       expect((await ler(cheio.id)).midias).toEqual(concorrente);
       cheio = await ler(cheio.id);
     } finally {
-      if (transacao) await lock.query("rollback");
-      if (pedido) await pedido.catch(() => undefined);
-      lock.release(); await pool.end();
+      try {
+        if (transacao && lock) await lock.query("rollback");
+      } finally {
+        // Destrói só a conexão exclusiva da bancada, inclusive se rollback
+        // falhou. Um connect recusado também alcança o fechamento do pool.
+        lock?.release(true);
+        try {
+          await Promise.race([pool.end(), new Promise<never>((_, reject) => {
+            const timer = setTimeout(() => reject(new Error("pool_close_timeout")), 3_000);
+            timer.unref();
+          })]);
+        } finally {
+          if (pedido) await pedido.catch(() => undefined); // POST já tem teto45s.
+        }
+      }
     }
     recibo.postgrestReal = true;
 
     recibo.fase = "edicao-no-teto";
     await editar(cheio);
-    await page.screenshot({ path: path.join(pasta, "edicao-teto5-antes.png"), fullPage: true });
+    await capturar("edicao-teto5-antes.png");
     const anterior = cheio.midias.find((m) => m.storage_path.endsWith(".wav"))!;
     await page.locator("#tpl-audio").setInputFiles({ name: "Recusado.wav", mimeType: "audio/wav", buffer: Buffer.from("nao e audio") });
     const recusado = page.waitForResponse((r) => r.url().endsWith(`/message-templates/${cheio.id}/midias`) && r.request().method() === "POST");
@@ -390,7 +452,7 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     await editar(cheio);
     await page.getByRole("dialog").getByRole("button", { name: "Remover áudio", exact: true }).click();
     await expect(page.getByRole("button", { name: "Desfazer remoção do áudio" })).toBeVisible();
-    await page.screenshot({ path: path.join(pasta, "remocao-pendente.png"), fullPage: true });
+    await capturar("remocao-pendente.png");
     expect((await ler(cheio.id)).midias).toEqual(cheio.midias);
     await page.getByRole("button", { name: "Desfazer remoção do áudio" }).click();
     await expect(page.getByLabel("Áudio da resposta rápida")).toBeVisible();
@@ -432,7 +494,7 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
           await expect(previa.getByLabel("Legenda", { exact: true })).toHaveCount(0);
           await expect(campo).toHaveValue(modelo.body);
         }
-        if (i === 6) await page.screenshot({ path: path.join(pasta, "preparar-texto-imagem-audio.png"), fullPage: true });
+        if (i === 6) await capturar("preparar-texto-imagem-audio.png");
         await previa.getByRole("button", { name: "Enviar", exact: true }).click();
         if (c.imagem) esperados.push({ tipo: "image", texto: modelo.body });
         if (c.audio) esperados.push({ tipo: "audio", texto: "" });
@@ -473,47 +535,70 @@ test("sete combinações e edição de áudio no teto5 conservam bytes e snapsho
     await salvar();
     expect((await ler(textoAudio.id)).midias).toEqual([]);
     await expect(linha(textoAudio.title).getByText("Áudio", { exact: true })).toHaveCount(0);
-    await page.screenshot({ path: path.join(pasta, "edicao-final.png"), fullPage: true });
+    await capturar("edicao-final.png");
     recibo.fase = "concluido";
   } finally {
     const concluido = recibo.fase === "concluido";
-    if (!concluido) await page.screenshot({ path: path.join(pasta, "falha-antes-da-limpeza.png"), fullPage: true }).catch(() => undefined);
-    const limpar = async (tarefa: () => PromiseLike<{ error: unknown }>) => {
-      try { if ((await tarefa()).error) recibo.falhasDeLimpeza++; }
-      catch { recibo.falhasDeLimpeza++; }
-    };
-    // Só prefixos de UUIDs criados nesta execução. A lista inclui eventuais
-    // objetos sem referência que uma confirmação incerta tenha conservado.
-    const limparObjetos = async (prefixo: string, pertence: (caminho: string) => boolean) => {
-      try {
-        const r = await admin.storage.from("whatsapp-media").list(prefixo, { limit: 100 });
-        if (r.error) { recibo.falhasDeLimpeza++; return; }
-        const caminhos = (r.data ?? []).map((m) => `${prefixo}/${m.name}`);
-        if (!caminhos.every(pertence)) { recibo.falhasDeLimpeza++; return; }
-        if (caminhos.length) await limpar(() => admin.storage.from("whatsapp-media").remove(caminhos));
-      } catch { recibo.falhasDeLimpeza++; }
-    };
-    for (const [id, dona] of modelos) {
-      if (dona === org) {
-        const r = await page.request.delete(`/api/v1/message-templates/${id}`).catch(() => null);
-        if (!r || r.status() !== 204) recibo.falhasDeLimpeza++;
-      }
-      // Também cobre criação parcial anterior ao login; a rota DELETE manual
-      // continua sendo exercitada acima para todos os modelos da sessão A.
-      await limpar(() => admin.from("message_templates").delete().eq("id", id).eq("organization_id", dona));
-      await limparObjetos(`${dona}/templates/${id}`, (c) => midiaPertenceAoTemplate(c, dona, id));
-    }
-    if (conversa) {
-      await limpar(() => admin.from("conversations").delete().eq("id", conversa).eq("organization_id", org));
-      await limparObjetos(`${org}/${conversa}`, (c) => isMediaPathInOrganization(c, org) && isMediaPathOwnedBy(c, org, conversa));
-    }
-    if (contato) await limpar(() => admin.from("contacts").delete().eq("id", contato).eq("organization_id", org));
-    if (canal) await limpar(() => admin.from("channel_sessions").delete().eq("id", canal).eq("organization_id", org));
-    for (const id of [org, outraOrg].filter(Boolean)) await limpar(() => admin.from("organizations").delete().eq("id", id));
-    if (usuario) await limpar(() => admin.auth.admin.deleteUser(usuario));
-    if (receptor.listening) await new Promise<void>((resolve) => receptor.close(() => resolve()));
-    recibo.limpeza = recibo.falhasDeLimpeza === 0;
-    writeFileSync(path.join(pasta, "recibo.json"), JSON.stringify(recibo, null, 2));
+    if (!concluido) await capturar("falha-antes-da-limpeza.png").catch(() => { recibo.falhaNaCaptura = true; });
+    const inicioLimpeza = performance.now();
+    recibo.execucaoMs = Math.round(inicioLimpeza - inicio - recibo.preparoMs);
+    // Falha ao gravar/anexar não pode impedir a limpeza nem virar verde.
+    await finalizarProvaComEvidencia(
+      () => guardarRecibo("recibo-antes-da-limpeza.json"),
+      async () => {
+        sinalDaLimpeza = AbortSignal.timeout(20_000);
+        const limpar = async (tarefa: () => PromiseLike<{ error: unknown }>) => {
+          if (sinalDaLimpeza!.aborted) { recibo.limpezaInterrompida = true; return; }
+          try { if ((await tarefa()).error) recibo.falhasDeLimpeza++; }
+          catch { recibo.falhasDeLimpeza++; }
+        };
+        // Só prefixos de UUIDs criados nesta execução. A lista inclui eventuais
+        // objetos sem referência que uma confirmação incerta tenha conservado.
+        const limparObjetos = async (prefixo: string, pertence: (caminho: string) => boolean) => {
+          if (sinalDaLimpeza!.aborted) { recibo.limpezaInterrompida = true; return; }
+          try {
+            const r = await admin.storage.from("whatsapp-media").list(prefixo, { limit: 100 });
+            if (r.error) { recibo.falhasDeLimpeza++; return; }
+            const caminhos = (r.data ?? []).map((m) => `${prefixo}/${m.name}`);
+            if (!caminhos.every(pertence)) { recibo.falhasDeLimpeza++; return; }
+            if (caminhos.length) await limpar(() => admin.storage.from("whatsapp-media").remove(caminhos));
+          } catch { recibo.falhasDeLimpeza++; }
+        };
+        for (const [id, dona] of modelos) {
+          if (sinalDaLimpeza.aborted) { recibo.limpezaInterrompida = true; break; }
+          if (dona === org) {
+            const restante = Math.max(1, 20_000 - (performance.now() - inicioLimpeza));
+            const r = await page.request.delete(`/api/v1/message-templates/${id}`, { timeout: Math.min(5_000, restante) }).catch(() => null);
+            if (!r || r.status() !== 204) recibo.falhasDeLimpeza++;
+          }
+          // Também cobre criação parcial anterior ao login; a rota DELETE manual
+          // continua sendo exercitada acima para todos os modelos da sessão A.
+          await limpar(() => admin.from("message_templates").delete().eq("id", id).eq("organization_id", dona));
+          await limparObjetos(`${dona}/templates/${id}`, (c) => midiaPertenceAoTemplate(c, dona, id));
+        }
+        if (conversa) {
+          await limpar(() => admin.from("conversations").delete().eq("id", conversa).eq("organization_id", org));
+          await limparObjetos(`${org}/${conversa}`, (c) => isMediaPathInOrganization(c, org) && isMediaPathOwnedBy(c, org, conversa));
+        }
+        if (contato) await limpar(() => admin.from("contacts").delete().eq("id", contato).eq("organization_id", org));
+        if (canal) await limpar(() => admin.from("channel_sessions").delete().eq("id", canal).eq("organization_id", org));
+        for (const id of [org, outraOrg].filter(Boolean)) await limpar(() => admin.from("organizations").delete().eq("id", id));
+        if (usuario) await limpar(() => admin.auth.admin.deleteUser(usuario));
+        if (receptor.listening) await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => { recibo.falhasDeLimpeza++; resolve(); }, 3_000);
+          receptor.closeAllConnections();
+          receptor.close(() => { clearTimeout(timer); resolve(); });
+        });
+        recibo.limpezaMs = Math.round(performance.now() - inicioLimpeza);
+        recibo.limpeza = recibo.falhasDeLimpeza === 0 && !recibo.limpezaInterrompida;
+        recibo.estadoDaLimpeza = recibo.limpeza ? "concluida" : "incompleta";
+      },
+      async () => {
+        recibo.limpezaMs = Math.round(performance.now() - inicioLimpeza);
+        if (recibo.estadoDaLimpeza === "pendente") recibo.estadoDaLimpeza = "incompleta";
+        await guardarRecibo("recibo.json");
+      },
+    );
     if (concluido) {
       expect(falhaDoReceptor, "receptor sintético recusou o contrato").toBe(false);
       expect(recibo.limpeza, "limpeza das fixtures incompleta").toBe(true);
