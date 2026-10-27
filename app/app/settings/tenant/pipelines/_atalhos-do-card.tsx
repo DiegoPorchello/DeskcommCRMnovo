@@ -107,9 +107,17 @@ export function EditorDeAtalhos({
   const t = useT();
   const cheio = valor.length >= MAX_ATALHOS;
 
-  function trocar(indice: number, campo: keyof AtalhoDoCard, conteudo: string) {
+  /**
+   * Troca UM campo da linha. O `Patch` é tipado, e não um `keyof AtalhoDoCard`
+   * com valor `string`: o ícone é uma UNIÃO fechada (`IconeDeAtalho`), e passar
+   * o nome do campo + texto solto faria o TypeScript aceitar `icone: "foguete"`
+   * — exatamente o valor que a gravação recusa depois.
+   */
+  function trocar(indice: number, patch: Partial<AtalhoDoCard>) {
+    const atual = valor[indice];
+    if (!atual) return;
     const proximo = [...valor];
-    proximo[indice] = { ...proximo[indice], [campo]: conteudo };
+    proximo[indice] = { ...atual, ...patch };
     onChange(proximo);
   }
 
@@ -136,12 +144,12 @@ export function EditorDeAtalhos({
               maxLength={TAMANHO_MAXIMO_DO_ROTULO}
               value={atalho.rotulo}
               disabled={!podeEditar}
-              onChange={(e) => trocar(i, "rotulo", e.target.value)}
+              onChange={(e) => trocar(i, { rotulo: e.target.value })}
             />
             <Select
               value={atalho.icone}
               disabled={!podeEditar}
-              onValueChange={(icone) => trocar(i, "icone", icone)}
+              onValueChange={(icone) => trocar(i, { icone: icone as IconeDeAtalho })}
             >
               <SelectTrigger aria-label={`${t("Ícone do atalho")} ${i + 1}`}>
                 <SelectValue />
@@ -160,7 +168,7 @@ export function EditorDeAtalhos({
               value={atalho.url}
               disabled={!podeEditar}
               aria-invalid={recusa !== null}
-              onChange={(e) => trocar(i, "url", e.target.value)}
+              onChange={(e) => trocar(i, { url: e.target.value })}
             />
             <button
               type="button"

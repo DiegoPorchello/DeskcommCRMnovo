@@ -18082,6 +18082,42 @@ export const DICIONARIO: Traducoes = {
   'Para não depender do dado, ponha um texto de reserva: {{primeiro_nome|"aluno"}}.': {
     es: 'Para no depender del dato, pon un texto de respaldo: {{primeiro_nome|"alumno"}}.',
   },
+  // ATALHOS DO CARD (issue #3487) — o cadastro em Configurações › Funis e a
+  // faixa de botões do dossiê e do painel do Inbox. As frases de recusa são as
+  // do editor; o motivo vem do domínio como CÓDIGO e é traduzido aqui, porque
+  // a chave precisa ser literal para o guarda de espanhol enxergá-la.
+  "Atalhos do card": { es: "Accesos del tarjeta" },
+  "Atalhos do negócio": { es: "Accesos del negocio" },
+  "Adicionar atalho": { es: "Añadir acceso" },
+  "Remover atalho": { es: "Quitar acceso" },
+  "Rótulo do atalho": { es: "Etiqueta del acceso" },
+  "Rótulo (Ligar)": { es: "Etiqueta (Llamar)" },
+  "Ícone do atalho": { es: "Icono del acceso" },
+  "Endereço do atalho": { es: "Dirección del acceso" },
+  "Carrinho": { es: "Carrito" },
+  "Link": { es: "Enlace" },
+  "Boleto": { es: "Recibo" },
+  "Mapa": { es: "Mapa" },
+  "Informe o endereço do atalho.": { es: "Indica la dirección del acceso." },
+  "O endereço é longo demais.": { es: "La dirección es demasiado larga." },
+  "O endereço tem caractere invisível.": { es: "La dirección tiene un carácter invisible." },
+  "Comece com tel:, http:// ou https://.": { es: "Empieza con tel:, http:// o https://." },
+  "Só tel:, http:// e https:// são aceitos.": { es: "Solo se aceptan tel:, http:// y https://." },
+  "Falta o que vem depois do esquema.": { es: "Falta lo que va después del esquema." },
+  "Depois do esquema, escreva // e o endereço.": { es: "Después del esquema, escribe // y la dirección." },
+  "O limite é de seis atalhos por funil.": { es: "El límite es de seis accesos por embudo." },
+  "Dê um nome a cada atalho do card antes de salvar.": {
+    es: "Ponle un nombre a cada acceso de la tarjeta antes de guardar.",
+  },
+  "Corrija o endereço dos atalhos do card: só tel:, http:// e https:// são aceitos.": {
+    es: "Corrige la dirección de los accesos de la tarjeta: solo se aceptan tel:, http:// y https://.",
+  },
+  "tel:{{telefone}} ou https://…?cliente={{erp_id}}": {
+    es: "tel:{{telefone}} o https://…?cliente={{erp_id}}",
+  },
+  "Botões no card do negócio que abrem outro sistema com o dado do cliente já preenchido. Aceitam tel:, http:// e https://. Marcadores: {{telefone}}, {{nome}}, {{primeiro_nome}}, {{email}} e {{documento}}; campos personalizados entram como {{chave}}, {{lead.chave}} ou {{contact.chave}}.": {
+    es: "Botones en la tarjeta del negocio que abren otro sistema con el dato del cliente ya rellenado. Aceptan tel:, http:// y https://. Marcadores: {{telefone}}, {{nome}}, {{primeiro_nome}}, {{email}} y {{documento}}; los campos personalizados entran como {{chave}}, {{lead.chave}} o {{contact.chave}}.",
+  },
 };
 
 /**

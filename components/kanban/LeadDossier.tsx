@@ -24,7 +24,6 @@ import { EtapaNoDossie } from "./EtapaNoDossie";
 import { SecaoDoDossie, useSecoesRecolhidas } from "./SecaoDoDossie";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
 import type { AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
-import { useAtalhosDoFunil } from "@/hooks/kanban/useAtalhosDoFunil";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 
@@ -44,11 +43,11 @@ interface Props {
   etapas?: Pick<Stage, "id" | "name">[];
   onMudarEtapa?: (stageId: string) => void;
   /**
-   * OS ATALHOS DO CARD (#3487). Opcionais porque o caso comum já os tem: quem
-   * abre o dossiê é o quadro, e o quadro carrega `pipeline.settings` no cache
-   * (`useAtalhosDoFunil`). Quem está FORA da árvore do quadro — o calendário do
-   * funil, que recebe o funil inteiro por prop — passa a lista aqui e não
-   * depende de cache que ninguém populou.
+   * OS ATALHOS DO CARD (#3487): o que está em `crm_pipelines.settings.atalhos`,
+   * já lido por `atalhosDoFunil`. Quem monta o dossiê tem o funil em mão — o
+   * quadro, a lista e o calendário recebem `pipeline`/`funil` inteiros —, então
+   * a lista vem por prop em vez de o dossiê sair buscando por conta própria.
+   * Ausente = nenhum botão, que é o comportamento de antes da entrega.
    */
   atalhos?: AtalhoDoCard[];
 }
@@ -112,11 +111,12 @@ export function LeadDossier({
 }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
-  const atalhosDoCache = useAtalhosDoFunil(pipelineId);
-  // A prop vence o cache: quem a passa tem o funil em mão. Sem prop, o cache do
-  // quadro responde — e cache frio devolve `[]`, que é "nenhum botão", o
-  // comportamento de antes desta entrega.
-  const atalhosDoCard = atalhos ?? atalhosDoCache;
+  // Sem prop, nenhum botão: quem abre o dossiê TEM o funil em mão (o quadro, a
+  // lista e o calendário passam `atalhos`) e é de lá que sai o `settings`. Ler
+  // o cache do react-query aqui dentro custaria um `QueryClientProvider`
+  // obrigatório em todo teste que monta o dossiê — inclusive os que existiam
+  // antes desta entrega — para economizar uma prop que o chamador já tem.
+  const atalhosDoCard = atalhos ?? [];
   const campos = useRef<HTMLDivElement | null>(null);
   const formulario = useRef<ControleDosCamposDoNegocio | null>(null);
   const timeline = useLeadTimeline(open ? lead.id : null, lead.contact_id);

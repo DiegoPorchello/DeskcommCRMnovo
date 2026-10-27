@@ -6,6 +6,7 @@ import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { useLeadsPaginados } from "@/hooks/kanban/useLeadsPaginados";
+import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { formatValorDoNegocio } from "@/lib/money";
 import type { Pipeline, Stage } from "@/lib/kanban/types";
@@ -203,6 +204,8 @@ export function ListaDoFunil({ pipelineId, pipeline: funil, stages }: Props) {
           fieldDefs={campoDefs}
           stageName={nomeDaEtapa(leadDoDossie.stage_id)}
           ownerNames={ownerNames}
+          // Os atalhos do card (#3487): o funil já está em mão nesta tela.
+          atalhos={atalhosDoFunil(funil.settings)}
         />
       )}
     </div>

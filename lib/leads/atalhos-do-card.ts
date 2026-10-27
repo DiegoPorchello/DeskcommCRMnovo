@@ -126,7 +126,8 @@ function texto(valor: unknown): string {
  */
 export function esquemaDoModelo(bruto: string | null | undefined): string | null {
   const achado = /^([a-z][a-z0-9+.-]*):/i.exec(texto(bruto));
-  return achado ? `${achado[1].toLowerCase()}:` : null;
+  const esquema = achado?.[1];
+  return esquema ? `${esquema.toLowerCase()}:` : null;
 }
 
 /**
@@ -203,7 +204,9 @@ export function marcadoresDoModelo(bruto: string | null | undefined): string[] {
   const modelo = texto(bruto);
   const saida: string[] = [];
   for (const achado of modelo.matchAll(/\{\{\s*([^{}\s]+)\s*\}\}/g)) {
-    const chave = achado[1].toLowerCase();
+    const escrito = achado[1];
+    if (!escrito) continue;
+    const chave = escrito.toLowerCase();
     if (!saida.includes(chave)) saida.push(chave);
   }
   return saida;
