@@ -17,20 +17,23 @@
  * Recusa qualquer Supabase que não seja local. Rode com o worker PARADO: com ele
  * de pé, as mensagens semeadas acordam a IA. Horários são relativos ao seed.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { type User, createClient } from "@supabase/supabase-js";
+import pg from "pg";
 
-const URL_SUPABASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const CHAVE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+import { exigirBancoLocal, exigirHttpLocal, validarOrganizacoesExtras } from "./seguranca";
+
 const SENHA = process.env.CURSO_SENHA ?? "Curso!Demo2026";
-if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(URL_SUPABASE)) {
-  throw new Error(`recusado: ${URL_SUPABASE || "(vazio)"} não é um Supabase local`);
+let db: ReturnType<typeof criarBanco>;
+/** Importar ajudantes não abre conexão nem exige credenciais. */
+function criarBanco() {
+  const url = exigirHttpLocal(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!chave) throw new Error("defina SUPABASE_SERVICE_ROLE_KEY");
+  return createClient(url, chave, { auth: { autoRefreshToken: false, persistSession: false } });
 }
-if (!CHAVE) throw new Error("defina SUPABASE_SERVICE_ROLE_KEY (o .env.e2e tem)");
-
-const db = createClient(URL_SUPABASE, CHAVE, { auth: { autoRefreshToken: false, persistSession: false } });
 const MIN = 60_000;
 const agora = Date.now();
 export const ha = (minutos: number) => new Date(agora - minutos * MIN).toISOString();
@@ -205,11 +208,109 @@ export type Contexto = {
   funil: { id: string; etapas: string[] };
 };
 
-async function main(): Promise<Contexto> {
-  // ---------- organização: a única da instalação fresca ----------
-  const orgs = exigir(await db.from("organizations").select("id"), "organizations") as Array<{ id: string }>;
-  if (orgs.length !== 1) throw new Error(`esperava 1 organização (instalação fresca), achei ${orgs.length}`);
-  const org = orgs[0]!.id;
+/**
+ * Estado de fábrica da instalação: o que um módulo pode ligar/desligar e que vale
+ * para TODAS as telas (recursos opcionais, marca, cadastro, credenciais da
+ * instalação, configurações da organização). A primeira rodada numa instalação
+ * fresca guarda; as seguintes devolvem tudo a ele antes de cada lição. Sem isto,
+ * o módulo que liga "Propostas" muda o menu nas fotos de todos os outros.
+ */
+const DA_INSTALACAO = {
+  platform_config: "chave",
+  platform_settings: "id",
+  platform_branding: "id",
+  modulos_instalados: "modulo",
+  // quem administra a plataforma (e se exige verificação em duas etapas): uma lição que tirasse a
+  // Helena daqui, ou ligasse o MFA dela, trancaria o capturador fora de todas as lições seguintes
+  platform_admins: "user_id",
+} as const;
+/** Colunas da organização que uma tela pode mudar (fuso, idioma, retenção, marca, suspensão…). */
+const DA_ORGANIZACAO = [
+  "slug", "legal_name", "display_name", "cnpj", "status", "timezone", "locale", "ai_budget_cents",
+  "country", "currency", "media_retention_enforced", "media_retention_days", "settings", "dpo_email", "privacy_policy_url", "suspended_at", "redacted_at", "suspended_reason", "suspended_by",
+] as const;
+type Linha = Record<string, unknown>;
+
+async function voltarAoEstadoDeFabrica(org: string, saida: string) {
+  const arquivo = path.join(saida, ".fabrica.json");
+  if (!existsSync(arquivo)) {
+    const tabelas: Record<string, Linha[]> = {};
+    for (const t of Object.keys(DA_INSTALACAO)) tabelas[t] = exigir(await db.from(t).select("*"), `fábrica ${t}`) as Linha[];
+    // lê a linha inteira e guarda só as colunas da lista que existem: o baseline remove colunas em apêndice
+    const linha = exigir(await db.from("organizations").select("*").eq("id", org).single(), "fábrica org") as Linha;
+    const organizacao = Object.fromEntries(DA_ORGANIZACAO.filter((c) => c in linha).map((c) => [c, linha[c]]));
+    mkdirSync(saida, { recursive: true });
+    const appMeta = exigir(await db.from("platform_meta_app").select("*"), "fábrica App da Meta");
+    writeFileSync(arquivo, JSON.stringify({ tabelas, organizacao, appMeta }, null, 2));
+    console.info("estado de fábrica guardado");
+    return;
+  }
+  const fabrica = JSON.parse(readFileSync(arquivo, "utf8")) as { tabelas: Record<string, Linha[]>; organizacao: Linha; appMeta?: Linha[] };
+  // Snapshot antigo não contém estas colunas. Defaults do baseline, nunca o valor já alterado
+  // por uma lição: copiar o estado atual aqui perpetuaria a contaminação que queremos desfazer.
+  const organizacao = { country: null, currency: "BRL", media_retention_enforced: true, ...fabrica.organizacao };
+  for (const [t, chave] of Object.entries(DA_INSTALACAO)) {
+    const guardadas = fabrica.tabelas[t] ?? [];
+    const agora = exigir(await db.from(t).select(chave), `estado ${t}`) as unknown as Linha[];
+    const sobrando = agora.map((l) => l[chave]).filter((k) => !guardadas.some((g) => g[chave] === k));
+    if (sobrando.length) semErro(await db.from(t).delete().in(chave, sobrando as string[]), `voltar ${t}`);
+    if (guardadas.length) semErro(await db.from(t).upsert(guardadas, { onConflict: chave }), `voltar ${t}`);
+  }
+  semErro(await db.from("organizations").update(organizacao).eq("id", org), "voltar a organização");
+  // A Meta não concede DELETE ao service_role. Como no módulo admin-meta, só a bancada local
+  // pode restaurar a linha inteira (incluindo o estado "Nunca configurado por aqui").
+  const metaAtual = exigir(await db.from("platform_meta_app").select("*"), "App da Meta atual") as Linha[];
+  const appMeta = fabrica.appMeta ?? [];
+  if (JSON.stringify(metaAtual) !== JSON.stringify(appMeta)) {
+    const cli = new pg.Client({ connectionString: exigirBancoLocal(process.env.SUPABASE_DB_URL) });
+    await cli.connect();
+    try {
+      // SUPABASE_DB_URL pode apontar por engano para OUTRO Postgres local. A organização
+      // resolvida pelo client precisa existir também na conexão direta antes do DELETE.
+      const identidade = await cli.query("select id from public.organizations where id = $1", [org]);
+      if (identidade.rowCount !== 1) throw new Error("Postgres direto não corresponde à organização da bancada Supabase");
+      await cli.query("delete from public.platform_meta_app where id = 1");
+      if (appMeta.length) semErro(await db.from("platform_meta_app").upsert(appMeta), "restaurar App da Meta");
+    } finally {
+      await cli.end();
+    }
+  }
+}
+
+export async function semearBase(): Promise<Contexto> {
+  db = criarBanco();
+  // ---------- organização ----------
+  // A da instalação é a do dono (a Helena), NUNCA "a mais antiga": sementes do Admin criam empresas
+  // e admins de exemplo com datas no passado, e por created_at a base chegou a escolher uma delas e
+  // tentar apagar a Clínica. O dono é achado pelo e-mail que a própria base grava; na primeira rodada
+  // de uma instalação fresca (antes da troca de e-mail) ele é o único admin da plataforma.
+  const helena = (await todosOsUsuarios()).find((u) => u.email === EMAIL.helena);
+  const donoId = helena?.id ?? (exigir(
+    await db.from("platform_admins").select("user_id").order("granted_at").limit(1).single(),
+    "dono da instalação",
+  ) as { user_id: string }).user_id;
+  const vinculos = exigir(
+    await db.from("user_organizations").select("organization_id").eq("user_id", donoId).eq("role", "admin"),
+    "organização do dono",
+  ) as Array<{ organization_id: string }>;
+  if (vinculos.length !== 1) throw new Error(`o dono devia ser admin de UMA organização, é de ${vinculos.length} — semente de módulo pôs a Helena noutra empresa?`);
+  const org = vinculos[0]!.organization_id;
+  // as outras são de sementes de módulo e somem aqui — senão apareceriam no seletor de empresa de
+  // todas as fotos. Saem pelo caminho do produto (fn_excluir_organizacao desarma as armadilhas da
+  // cascata), depois de tirar a assinatura de exemplo que trava a exclusão.
+  const extras = exigir(await db.from("organizations").select("id, slug").neq("id", org), "organizações extras") as Array<{ id: string; slug: string }>;
+  // Recusar dados desconhecidos ANTES do primeiro DELETE: este script só limpa a bancada do curso.
+  // Todos os ids de empresas de exemplo são declarados nestas sementes.
+  validarOrganizacoesExtras(org, extras);
+  for (const x of extras) {
+    semErro(await db.from("cobranca_assinaturas").delete().eq("organization_id", x.id), `assinatura de ${x.slug}`);
+    semErro(await db.from("organizations").update({ status: "suspended", suspended_kind: "administrativa", suspended_at: new Date().toISOString() }).eq("id", x.id), `suspender ${x.slug}`);
+    semErro(await db.rpc("fn_excluir_organizacao", {
+      p_org: x.id, p_actor: donoId, p_confirmacao: x.slug, p_motivo: "curso: empresa de exemplo de outro módulo",
+    }), `excluir ${x.slug}`);
+  }
+  const saida = path.join(path.dirname(new URL(import.meta.url).pathname), "saida");
+  await voltarAoEstadoDeFabrica(org, saida);
   semErro(await db.from("organizations").update({
     display_name: "Clínica Bem Viver", legal_name: "Clínica Bem Viver Saúde Integrada Ltda", status: "active", onboarded_at: new Date().toISOString(),
   }).eq("id", org), "organização");
@@ -232,6 +333,20 @@ async function main(): Promise<Contexto> {
   };
 
   // ---------- recomeça do zero ----------
+  // O plaintext desta chave aparece numa foto pública. Mesmo numa rodada parcial ela não
+  // pode continuar válida depois que a bancada for preparada para a próxima lição.
+  semErro(await db.from("api_tokens").update({ revoked_at: new Date().toISOString(), revoked_by: pessoa.helena })
+    .eq("organization_id", org).eq("name", "Prontuário eletrônico da clínica").is("revoked_at", null), "revogar chave fotografada");
+  // Só ids próprios do curso: pedidos e regras não podem contaminar a próxima tela, nem
+  // acordar efeitos externos quando uma lição de outro módulo cria um lead de teste.
+  semErro(await db.from("lgpd_requests").delete().eq("organization_id", org).in("id", [
+    "7c41e9a2-5b10-4d3e-9f21-be7000000001", "2a8f03d6-91c4-4e7a-8b55-be7000000002",
+    "d415b7e0-3a62-4f19-a8c3-be7000000003", "9e06c2f8-7d35-4b81-b6e4-be7000000004",
+  ]), "limpar pedidos LGPD da demonstração");
+  semErro(await db.from("automation_rules").update({ is_active: false }).eq("organization_id", org)
+    .eq("id", "a0d00000-0000-4000-8000-000000000001"), "desarmar regra de IA de outro módulo");
+  semErro(await db.from("followup_flow_pointers").update({ status: "disabled" }).eq("organization_id", org)
+    .in("id", [1, 2, 3].map((n) => `be300000-0000-4000-8000-${String(n).padStart(12, "0")}`)), "desarmar fluxos da demonstração");
   semErro(await db.from("conversations").delete().eq("organization_id", org), "limpar conversas");
   semErro(await db.from("crm_leads").delete().eq("organization_id", org), "limpar leads");
   semErro(await db.from("contacts").delete().eq("organization_id", org), "limpar contatos");
@@ -364,7 +479,6 @@ async function main(): Promise<Contexto> {
     }), `lead ${titulo}`);
   }
 
-  const saida = path.join(path.dirname(new URL(import.meta.url).pathname), "saida");
   mkdirSync(saida, { recursive: true });
   writeFileSync(path.join(saida, "contas.json"), JSON.stringify({
     admin: { email: EMAIL.helena, senha: SENHA },
@@ -376,7 +490,7 @@ async function main(): Promise<Contexto> {
 }
 
 async function rodar() {
-  const ctx = await main();
+  const ctx = await semearBase();
   const modulo = process.argv[2];
   if (!modulo || modulo === "inbox") return;
   if (!/^[a-z0-9-]+$/.test(modulo)) throw new Error(`módulo inválido: ${modulo}`);

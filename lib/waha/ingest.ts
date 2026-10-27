@@ -32,6 +32,7 @@ import { getWahaClient } from "@/lib/waha/client";
 import { acelerarPipelineDeEventos } from "@/lib/dev/kick-local-pipeline";
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { estamparAtribuicaoDoContato, metadataDoAnuncio } from "@/lib/leads/atribuicao-de-anuncio";
+import { ancoraCtwaDaMensagem } from "@/lib/leads/prova-meta-lead-submitted";
 import { extrairEEstamparAtribuicaoGoogle } from "@/lib/plataformas-de-anuncio/google/atribuicao";
 import { extrairAtribuicaoWaha } from "@/lib/waha/atribuicao-de-anuncio";
 import { criarIngestDeGrupoDb, gravarMensagemDeGrupo } from "@/lib/grupos/ingest";
@@ -40,6 +41,8 @@ import { previaDaMensagem } from "@/lib/messaging/previa-da-mensagem";
 import { semAssinatura } from "@/lib/messaging/assinatura";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { ackToStatus } from "@/lib/types/messaging";
+import { fraseDaFalhaDeCanal } from "@/lib/channels/frases-de-falha";
+import { emitirFalhaDeEntrega, telefoneDoEmbed, type EmbedDoContato } from "@/lib/messaging/falha-de-entrega";
 import type { WahaEnvelope, WahaPayload } from "@/lib/waha/envelope";
 import { bareWaMessageId, chatIdFromWaMessageId, wahaEchoExternalIds } from "@/lib/waha/message-id";
 import { logger } from "@/lib/logger";
@@ -346,6 +349,10 @@ export function parseChatId(chatId: string): ChatIdentity {
     // `replace(/^\+/, "")` fica: é ancorado em `^`, casa 1 caractere, O(1) — não é
     // o que o CodeQL apontou.
     const digits = semSufixoDeChat(chatId).replace(/^\+/, "");
+    // Mesma faixa de `telefoneDoJid` e do CHECK contacts_phone_e164_format.
+    // Avisos do WhatsApp (0@s.whatsapp.net) não são contatos discáveis: o
+    // importador deve ignorá-los, em vez de abortar no upsert com telefone +0.
+    if (!/^\d{8,15}$/.test(digits)) return { kind: "unknown", phone: null, lid: null };
     return { kind: "phone", phone: "+" + digits, lid: null };
   }
   return { kind: "unknown", phone: null, lid: null };
@@ -1144,6 +1151,7 @@ async function handleInbound(
         // O anúncio DESTA mensagem vai junto — o contato guarda só o primeiro, e
         // quem volta por outro anúncio precisa deixar rastro. Ver `metadataDoAnuncio`.
         ...metadataDoAnuncio(atribuicao),
+        ...ancoraCtwaDaMensagem(atribuicao),
         // Nome original do anexo (#2613). Só quando há nome: a chave nunca é
         // gravada vazia, e gravação é de linha NOVA (o INSERT é o único caminho
         // que escreve `metadata` aqui), então nada do que já está é sobrescrito.
@@ -1758,15 +1766,23 @@ async function handleOutboundFromUserPhone(
   }
 }
 
+/**
+ * O aviso de entrega do WhatsApp só faz o status ANDAR PARA A FRENTE
+ * (`sending < sent < delivered < read`), com a mesma régua do canal Zernio
+ * (`lib/channels/zernio/ingest.ts`). A rede não garante a ordem dos avisos: uma
+ * rajada de avisos antigos, reenviada numa reconexão, não pode fazer uma
+ * mensagem lida voltar a "entregue" nem devolver uma enviada a "enviando".
+ *
+ * A condição mora NO PRÓPRIO UPDATE (`.in("status", …)`), sobre a linha vigente;
+ * não se lê o status antes para depois escrever. E as horas de entrega e de
+ * leitura são gravadas uma vez só (`is null`). Uma confirmação do aparelho
+ * (ACK 2/3) recupera `failed`, como na main: a falha pode ter sido um timeout
+ * antes da confirmação. ACK 0/1 não prova entrega e não recupera a falha.
+ */
 async function handleAck(admin: Admin, session: Session, p: WahaPayload): Promise<void> {
   if (!p.id) return;
   const ack = p.ack ?? 0;
-  const status = ackToStatus(ack);
   const now = new Date().toISOString();
-
-  const update: Record<string, unknown> = { ack, status };
-  if (ack >= 2) update.delivered_at = now;
-  if (ack >= 3) update.read_at = now;
 
   // O ack do WAHA 2026.x vem como `{fromMe}_{chatId}_{bareId}`. O NOWEB grava
   // `external_id` = bareId (id interno), o WEBJS grava o `_serialized` completo.
@@ -1774,11 +1790,116 @@ async function handleAck(admin: Admin, session: Session, p: WahaPayload): Promis
   // inbound (que é full e sustenta o dedup 23505).
   const bare = bareWaMessageId(p.id);
   const candidates = bare === p.id ? [p.id] : [p.id, bare];
-  await admin
+
+  if (ack < 0) {
+    await marcarAckDeErro(admin, session, candidates, now);
+    return;
+  }
+
+  // ack 0 (pendente) e ausente não mudam o status: `ackToStatus` devolve null.
+  const status = ackToStatus(ack);
+  if (status === null) return;
+
+  // Estados que ainda estão ANTES do novo na ordem. `failed` também pode
+  // avançar para entregue/lida: a confirmação do aparelho prevalece sobre o
+  // timeout/erro anterior. O ACK 1, só do servidor, não prova essa entrega.
+  const antes =
+    status === "read" ? ["sending", "sent", "delivered", "failed"]
+    : status === "delivered" ? ["sending", "sent", "failed"]
+    : ["sending"];
+  const { error } = await admin
     .from("messages")
-    .update(update)
+    .update({ ack, status })
     .eq("organization_id", session.organization_id)
-    .in("external_id", candidates);
+    .in("external_id", candidates)
+    .in("status", antes);
+  if (error) {
+    logger.warn("waha.ingest: aviso de entrega não gravado", { detail: error.message });
+  }
+
+  // Ordem das horas: entregue antes de lido. "Lido sem entregue antes" carimba
+  // as duas com o mesmo `now`, como o Zernio. Cada coluna só recebe a primeira.
+  if (ack >= 2) await carimbarUmaVez(admin, session, candidates, "delivered_at", now);
+  if (ack >= 3) await carimbarUmaVez(admin, session, candidates, "read_at", now);
+}
+
+async function carimbarUmaVez(
+  admin: Admin,
+  session: Session,
+  candidates: string[],
+  coluna: "delivered_at" | "read_at",
+  quando: string,
+): Promise<void> {
+  // Só carimbar depois de a linha avançar: se o UPDATE de status falhou, uma
+  // linha ainda `failed` não ganha hora de entrega sem mudar seu estado.
+  const { error } = await admin
+    .from("messages")
+    .update({ [coluna]: quando })
+    .eq("organization_id", session.organization_id)
+    .in("external_id", candidates)
+    .neq("status", "failed")
+    .is(coluna, null);
+  if (error) {
+    logger.warn("waha.ingest: hora do aviso não gravada", { detail: error.message, coluna });
+  }
+}
+
+/**
+ * ack = -1: o WhatsApp recusou a mensagem DEPOIS de o transporte tê-la aceitado.
+ * Só vale para o que nunca foi confirmado como entregue (`sending`/`sent`); uma
+ * linha `delivered`/`read` não muda e não emite nada, porque o aparelho já
+ * confirmou. Vira `failed` com `ack_error` — nunca volta a `sending`, o que
+ * faria o `recover-stuck-messages` abrir o alerta "não chegou ao cliente" com a
+ * orientação errada. Não abre aviso na Central: a falha aparece na bolha e no
+ * evento `message.failed`.
+ */
+async function marcarAckDeErro(
+  admin: Admin,
+  session: Session,
+  candidates: string[],
+  now: string,
+): Promise<void> {
+  const frase = fraseDaFalhaDeCanal("ack_error");
+  const { data, error } = await admin
+    .from("messages")
+    .update({
+      ack: -1,
+      status: "failed",
+      error_code: "ack_error",
+      error_message: frase,
+      updated_at: now,
+    })
+    .eq("organization_id", session.organization_id)
+    .in("external_id", candidates)
+    .in("status", ["sending", "sent"])
+    .select("id, conversation_id, contact_id, sent_via, contacts:contact_id(phone_number)");
+  if (error) {
+    logger.warn("waha.ingest: aviso de erro não gravado", { detail: error.message });
+    return;
+  }
+  // Só as linhas que ESTE aviso marcou: emitir por linha que não casou seria
+  // evento de uma falha que não aconteceu aqui.
+  const linhas = (data ?? []) as unknown as Array<{
+    id: string;
+    conversation_id: string | null;
+    contact_id: string | null;
+    sent_via: string | null;
+    contacts: EmbedDoContato;
+  }>;
+  for (const linha of linhas) {
+    await emitirFalhaDeEntrega(admin, {
+      organizationId: session.organization_id,
+      source: "waha-ack-webhook",
+      falha: {
+        message_id: linha.id,
+        conversation_id: linha.conversation_id,
+        contact_id: linha.contact_id,
+        contact: telefoneDoEmbed(linha.contacts),
+        sent_via: linha.sent_via,
+        erro: { codigo: "ack_error", titulo: frase },
+      },
+    });
+  }
 }
 
 /**

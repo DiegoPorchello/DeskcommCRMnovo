@@ -16,6 +16,7 @@ import { test, expect, type Page } from "./helpers/test";
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 
 interface E2ECreds {
+  org_id: string;
   password: string;
   users: Record<string, { id: string; email: string; role: string }>;
 }
@@ -85,10 +86,151 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   // A organização cascateia o resto; apagá-la é o que impede esta spec de
   // deixar inquilino solto para as partes seguintes do job.
-  if (orgAlheia) await db.from("organizations").delete().eq("id", orgAlheia);
+  if (orgAlheia) {
+    const { error } = await db.from("organizations").delete().eq("id", orgAlheia);
+    if (error) throw new Error("Não foi possível limpar a organização da prova de escopo.");
+  }
 });
 
 test.describe("G4-02 — inbox com escopo", () => {
+  test("mídia mantém o escopo da organização, inclusive na reprodução AAC", async ({ page }) => {
+    test.setTimeout(60_000);
+    const agent = creds.users.agent!;
+    const sessao = createClient(credenciais.url, credenciais.anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const marcador = randomUUID();
+    const bytesA = Buffer.from(`midia-sintetica-a-${marcador}`);
+    const bytesB = Buffer.from(`midia-sintetica-b-${marcador}`);
+    const caminhos: string[] = [];
+    let canal = "";
+    let contato = "";
+    let conversa = "";
+    let mensagem = "";
+
+    try {
+      const acesso = await sessao.auth.signInWithPassword({ email: agent.email, password: creds.password });
+      expect(acesso.error).toBeNull();
+      expect(acesso.data.user?.id).toBe(agent.id);
+      const outraConversa = await sessao.from("conversations").select("id").eq("id", conversaDeOutraOrg);
+      expect(outraConversa.error).toBeNull();
+      expect(outraConversa.data).toEqual([]);
+
+      canal = await insere("channel_sessions", {
+        organization_id: creds.org_id,
+        waha_session_name: `midia-escopo-${marcador}`,
+        display_name: "Canal da prova de mídia",
+        status: "WORKING",
+        webhook_secret_encrypted: "\\x00",
+      });
+      contato = await insere("contacts", {
+        organization_id: creds.org_id,
+        display_name: "Contato da prova de mídia",
+      });
+      conversa = await insere("conversations", {
+        organization_id: creds.org_id,
+        contact_id: contato,
+        channel_session_id: canal,
+        assigned_to_user_id: agent.id,
+        status: "open",
+      });
+      const caminhoA = `${creds.org_id}/${conversa}/${marcador}.ogg`;
+      const caminhoB = `${orgAlheia}/${conversaDeOutraOrg}/${marcador}.ogg`;
+      caminhos.push(caminhoA, caminhoB);
+      for (const [caminho, bytes] of [[caminhoA, bytesA], [caminhoB, bytesB]] as const) {
+        const { error } = await db.storage.from("whatsapp-media").upload(caminho, bytes, {
+          contentType: "audio/ogg",
+          upsert: false,
+        });
+        expect(error, "os objetos sintéticos precisam existir").toBeNull();
+      }
+      const controleB = await db.storage.from("whatsapp-media").download(caminhoB);
+      expect(controleB.error).toBeNull();
+      expect(Buffer.from(await controleB.data!.arrayBuffer())).toEqual(bytesB);
+
+      mensagem = await insere("messages", {
+        organization_id: creds.org_id,
+        contact_id: contato,
+        conversation_id: conversa,
+        channel_session_id: canal,
+        direction: "outbound",
+        type: "audio",
+        status: "sent",
+        sent_via: "user",
+        sent_by_user_id: agent.id,
+        media_mime: "audio/ogg",
+        media_size_bytes: bytesA.length,
+        media_storage_path: caminhoA,
+      });
+      const leitura = await sessao.from("messages")
+        .select("id, organization_id, media_storage_path")
+        .eq("id", mensagem)
+        .eq("organization_id", creds.org_id)
+        .single();
+      expect(leitura.error).toBeNull();
+      expect(leitura.data).toEqual({
+        id: mensagem,
+        organization_id: creds.org_id,
+        media_storage_path: caminhoA,
+      });
+
+      await login(page, agent.email);
+      const endpoint = `/api/v1/messages/${mensagem}/media`;
+      const conferirA = async () => {
+        const resposta = await page.request.get(endpoint, { maxRedirects: 0 });
+        expect(resposta.status()).toBe(302);
+        const location = resposta.headers().location;
+        expect(location).toBeTruthy();
+        const arquivo = await page.request.get(location!);
+        expect(arquivo.status()).toBe(200);
+        expect(await arquivo.body()).toEqual(bytesA);
+      };
+      await conferirA();
+
+      const trocarCaminho = async (caminho: string) => {
+        const alteracao = await sessao.from("messages")
+          .update({ media_storage_path: caminho })
+          .eq("id", mensagem)
+          .eq("organization_id", creds.org_id)
+          .select("media_storage_path")
+          .single();
+        expect(alteracao.error).toBeNull();
+        expect(alteracao.data?.media_storage_path).toBe(caminho);
+      };
+      await trocarCaminho(caminhoB);
+      for (const url of [endpoint, `${endpoint}?formato=aac`]) {
+        const resposta = await page.request.get(url, { maxRedirects: 0 });
+        expect(resposta.status()).toBe(404);
+        expect(resposta.headers().location).toBeUndefined();
+        expect(await resposta.json()).toMatchObject({
+          error: { code: "not_found", message: "Mensagem sem mídia." },
+        });
+        expect((await resposta.body()).includes(bytesB)).toBe(false);
+      }
+      await trocarCaminho(caminhoA);
+      await conferirA();
+    } finally {
+      const falhas: string[] = [];
+      for (const [tabela, id] of [
+        ["messages", mensagem],
+        ["conversations", conversa],
+        ["contacts", contato],
+        ["channel_sessions", canal],
+      ] as const) {
+        if (!id) continue;
+        const { error } = await db.from(tabela).delete().eq("id", id).eq("organization_id", creds.org_id);
+        if (error) falhas.push(tabela);
+      }
+      if (caminhos.length > 0) {
+        const { error } = await db.storage.from("whatsapp-media").remove(caminhos);
+        if (error) falhas.push("objetos sintéticos");
+      }
+      const { error } = await sessao.auth.signOut();
+      if (error) falhas.push("sessão de teste");
+      expect(falhas, "a prova de mídia precisa limpar seus próprios recursos").toEqual([]);
+    }
+  });
+
   test("agent em modo own*: vê Minhas e Fila, NÃO vê Todas", async ({ page }) => {
     await login(page, creds.users.agent!.email);
     await page.goto("/app/inbox");

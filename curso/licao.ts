@@ -98,8 +98,8 @@ export const Modulo = z
   .object({
     id: z.string().regex(/^[a-z0-9-]+$/),
     titulo: z.string().min(1),
-    /** A tela do produto que o módulo ensina — um href de lib/navigation/catalogo.ts. */
-    tela: z.string().startsWith("/app/"),
+    /** A tela que o módulo ensina — um href de lib/navigation/catalogo.ts, ou do menu do Admin (curso/menu-do-admin.ts). */
+    tela: z.string().regex(/^\/(app|admin)\//),
     resumo: z.string().min(1),
     licoes: z.array(Licao).min(1),
   })

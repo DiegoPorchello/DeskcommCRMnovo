@@ -19,6 +19,7 @@ import path from "node:path";
 
 import { chromium, type Locator, type Page } from "@playwright/test";
 
+import { caixaNaFoto } from "./geometria";
 import { type Acao, type Alvo, Modulo, chaveDoPasso } from "./licao";
 
 const RAIZ = path.dirname(new URL(import.meta.url).pathname);
@@ -31,17 +32,16 @@ const ALTURA = 900;
 type Caixa = { x: number; y: number; w: number; h: number };
 export type Captura = {
   foto: string;
+  /** Versão do app fotografado, independente do checkout onde se monta o curso. */
+  versao?: string;
+  capturado_em?: string;
   destaques: Array<Caixa & { rotulo: string; tipo: string }>;
   clicar: Caixa | null;
 };
 
-const contas: Record<string, { email: string; senha: string }> = JSON.parse(
-  readFileSync(path.join(SAIDA, "contas.json"), "utf8"),
-);
-
 type Raiz = Pick<Page, "getByTestId" | "getByRole" | "getByLabel" | "getByPlaceholder" | "getByText" | "locator">;
 
-function localizar(raiz: Raiz, a: Omit<Alvo, "dentro"> & { dentro?: Alvo["dentro"] }): Locator {
+export function localizar(raiz: Raiz, a: Omit<Alvo, "dentro"> & { dentro?: Alvo["dentro"] }): Locator {
   const base: Raiz = a.dentro ? localizar(raiz, a.dentro) : raiz;
   const exact = a.exato ?? false;
   const nome = a.nome === undefined ? undefined : a.regex ? new RegExp(a.nome) : a.nome;
@@ -55,16 +55,15 @@ function localizar(raiz: Raiz, a: Omit<Alvo, "dentro"> & { dentro?: Alvo["dentro
   return a.n === undefined ? l : l.nth(a.n);
 }
 
-async function medir(page: Page, a: Alvo): Promise<Caixa> {
+export async function medir(page: Page, a: Alvo): Promise<Caixa> {
   const l = localizar(page, a);
   await l.waitFor({ state: "visible", timeout: 8_000 });
   const b = await l.boundingBox();
   if (!b) throw new Error("sem caixa (fora da tela?)");
-  const x = Math.max(0, b.x), y = Math.max(0, b.y);
-  return { x, y, w: Math.min(b.width, LARGURA - x), h: Math.min(b.height, ALTURA - y) };
+  return caixaNaFoto(b, LARGURA, ALTURA);
 }
 
-async function executar(page: Page, a: Acao) {
+export async function executar(page: Page, a: Acao) {
   if (a.acao === "press") {
     if (a.alvo) await localizar(page, a.alvo).press(a.tecla, { timeout: 8_000 });
     else await page.keyboard.press(a.tecla);
@@ -85,7 +84,7 @@ async function executar(page: Page, a: Acao) {
 }
 
 /** Esqueletos de carregamento (animate-pulse do shadcn) na foto ensinam uma tela que não existe. */
-async function esperarCarregar(page: Page) {
+export async function esperarCarregar(page: Page) {
   await page.waitForLoadState("networkidle");
   await page
     .waitForFunction(() => ![...document.querySelectorAll(".animate-pulse")].some((e) => (e as HTMLElement).offsetParent !== null), null, { timeout: 8_000 })
@@ -97,7 +96,7 @@ async function esperarCarregar(page: Page) {
  * explicação. Tira o foco — menos de campo de texto e de menu/diálogo/lista
  * aberta, que fecham ou mudam de cara sem ele.
  */
-async function tirarFocoDeClique(page: Page) {
+export async function tirarFocoDeClique(page: Page) {
   await page.evaluate(() => {
     const el = document.activeElement as HTMLElement | null;
     if (!el || el === document.body) return;
@@ -108,13 +107,14 @@ async function tirarFocoDeClique(page: Page) {
 }
 
 /** Congela o que muda entre rodadas e atrapalharia a foto. */
-const CSS_DE_FOTO = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}
+export const CSS_DE_FOTO = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}
 [data-sonner-toaster],nextjs-portal{display:none!important}`;
 
-async function entrar(page: Page, papel: string) {
+export async function entrar(page: Page, papel: string, urlBase = URL_BASE) {
+  const contas: Record<string, { email: string; senha: string }> = JSON.parse(readFileSync(path.join(SAIDA, "contas.json"), "utf8"));
   const c = contas[papel];
   if (!c) throw new Error(`curso/saida/contas.json não tem a conta "${papel}"`);
-  await page.goto(`${URL_BASE}/login`);
+  await page.goto(`${urlBase}/login`);
   await page.waitForLoadState("networkidle");
   // pressSequentially: o fill() não dispara os listeners do React Hook Form do login
   for (const [sel, valor] of [['input[type="email"]', c.email], ['input[type="password"]', c.senha]] as const) {
@@ -124,6 +124,13 @@ async function entrar(page: Page, papel: string) {
   }
   await page.keyboard.press("Enter");
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 20_000 });
+}
+
+/** Uma rodada de lições não conclui as recapturas pendentes das jornadas. */
+export function salvarManifestoDasLicoes(arquivo: string, capturas: Record<string, Captura>, falhas: string[]) {
+  const anteriores: string[] = existsSync(arquivo) ? JSON.parse(readFileSync(arquivo, "utf8")).falhas ?? [] : [];
+  const jornadasPendentes = anteriores.filter((chave) => /^demo-[a-z0-9-]+--historia--[a-z0-9-]+$/.test(chave));
+  writeFileSync(arquivo, JSON.stringify({ largura: LARGURA, altura: ALTURA, capturas, falhas: [...jornadasPendentes, ...falhas] }, null, 2));
 }
 
 async function main() {
@@ -164,6 +171,7 @@ async function main() {
         timezoneId: "America/Sao_Paulo",
       });
       const page = await ctx.newPage();
+      try {
       for (const passo of licao.passos) {
         const chave = chaveDoPasso(modulo.id, licao.id, passo.id);
         try {
@@ -187,7 +195,11 @@ async function main() {
           const clicar = passo.clicar ? await medir(page, passo.clicar) : null;
           const foto = `capturas/${chave}.jpg`;
           await page.screenshot({ path: path.join(SAIDA, foto), type: "jpeg", quality: 72 });
-          capturas[chave] = { foto, destaques, clicar };
+          capturas[chave] = {
+            foto, destaques, clicar,
+            ...(process.env.CURSO_VERSAO_FOTOS ? { versao: process.env.CURSO_VERSAO_FOTOS.replace(/^v/, "") } : {}),
+            capturado_em: new Date().toISOString(),
+          };
           console.info(`ok   ${modulo.id}/${chave}`);
         } catch (e) {
           const msg = e instanceof Error ? e.message.split("\n")[0] : String(e);
@@ -196,19 +208,33 @@ async function main() {
           await page.screenshot({ path: path.join(SAIDA, `falha-${chave}.jpg`), type: "jpeg", quality: 60 }).catch(() => {});
         }
       }
+      } finally {
+      if (modulo.id === "api-tokens" && licao.id === "criar-um-token") {
+        // A foto mostra o plaintext real de uma chave. Depois de fotografar a lista ativa,
+        // revoga pela própria UI; nunca publicar uma credencial que ainda abre a bancada.
+        try {
+          await page.goto(URL_BASE + "/app/settings/api-tokens");
+          await esperarCarregar(page);
+          await page.getByRole("cell", { name: "Agenda online do site", exact: true }).waitFor({ state: "visible", timeout: 8_000 });
+          const revogar = page.getByRole("row", { name: /Prontuário eletrônico da clínica/ }).getByRole("button", { name: "Revogar", exact: true });
+          if (await revogar.count()) {
+            await revogar.click();
+            await revogar.waitFor({ state: "detached", timeout: 8_000 });
+          }
+        } catch {
+          falhas.push("api-tokens: não foi possível revogar a chave fotografada — não publique as fotos desta rodada");
+        }
+      }
       await ctx.close();
+      }
     }
   }
   await browser.close();
-  writeFileSync(
-    arquivoCapturas,
-    JSON.stringify({ largura: LARGURA, altura: ALTURA, capturas, falhas }, null, 2),
-  );
+  salvarManifestoDasLicoes(arquivoCapturas, capturas, falhas);
   console.info(`\n${Object.keys(capturas).length} fotos, ${falhas.length} falhas`);
   if (falhas.length) process.exit(1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

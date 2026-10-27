@@ -20,6 +20,8 @@ import {
   type ConversationWithContact,
 } from "@/hooks/inbox/useConversationsRealtime";
 import { useConversation, isNotFound } from "@/hooks/inbox/useConversation";
+import { useParticipantesDaConversa } from "@/hooks/inbox/useParticipantesDaConversa";
+import { useParticipacoesRealtime } from "@/hooks/inbox/useParticipacoesRealtime";
 import { ConversationList } from "./ConversationList";
 import { BarraDeAcoesEmLote } from "./BarraDeAcoesEmLote";
 import { InboxFilters, type InboxFiltersValue, type InboxTab } from "./InboxFilters";
@@ -276,6 +278,7 @@ export function InboxLayout({
 }: InboxLayoutProps = {}) {
   const t = useT();
   const { activeOrg, user } = useAuth();
+  useParticipacoesRealtime(user.id, activeOrg?.orgId ?? null);
   const supportReadonly = user.support?.access_mode === "support_readonly";
   const orgId = activeOrg?.orgId ?? null;
 
@@ -507,6 +510,8 @@ export function InboxLayout({
   const needsFetch = !!selectedId && !inList;
   const single = useConversation(selectedId, needsFetch);
   const selectedConversation: ConversationWithContact | null = inList ?? single.data ?? null;
+  const participantes = useParticipantesDaConversa(selectedConversation?.id ?? "");
+  const participaDoAtendimento = participantes.data?.some((p) => p.user_id === user.id) === true;
   const selectionNotFound =
     needsFetch && !single.isPending && !single.data && isNotFound(single.error);
 
@@ -1096,6 +1101,7 @@ export function InboxLayout({
                 ligada: activeOrg?.interface_settings?.bloquearAteAssumir === true,
                 donoDaConversa: selectedConversation.assigned_to_user_id,
                 atendenteId: user.id,
+                participanteAtivo: participaDoAtendimento,
               })}
               contactName={selectedConversation.contacts?.name ?? null}
               contactDisplayName={selectedConversation.contacts?.display_name}

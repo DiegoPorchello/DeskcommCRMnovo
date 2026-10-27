@@ -83,6 +83,10 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
   }
 
   const form = useForm<FormShape>({
+    // `onTouched`: o erro do documento nasce quando a pessoa SAI do campo, não
+    // só no clique de "Criar contato" (#3496). Sem validate em nenhum outro
+    // campo, nada muda para os demais.
+    mode: "onTouched",
     defaultValues: {
       name: nomeInicial ?? "",
       email: "",
@@ -92,6 +96,7 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
     },
   });
 
+  const cpfError = form.formState.errors.cpf;
   const tags = useWatch({ control: form.control, name: "tags" }) ?? [];
 
   async function onSubmit(values: FormShape) {
@@ -172,7 +177,30 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
             <Label htmlFor="cpf">
               {perfil.documento.rotulo} ({t("opcional")})
             </Label>
-            <Input id="cpf" placeholder={perfil.documento.exemplo} {...form.register("cpf")} />
+            {/* Validação no CAMPO, não no rodapé (#3496).
+                O servidor já recusava o documento pelo perfil do país; a tela
+                só avisava depois do clique, com a frase no rodapé do diálogo —
+                longe do campo e indistinguível de "não validou". Aqui a mesma
+                régua roda no blur (`mode: "onTouched"`), e a mensagem nasce
+                embaixo do input. Opcional continua opcional: vazio passa. */}
+            <Input
+              id="cpf"
+              placeholder={perfil.documento.exemplo}
+              aria-invalid={cpfError ? true : undefined}
+              aria-describedby={cpfError ? "cpf-erro" : undefined}
+              {...form.register("cpf", {
+                validate: (valor) => {
+                  const texto = (valor ?? "").trim();
+                  if (texto.length === 0) return true;
+                  return perfil.documento.valida(texto) || perfil.documento.mensagemInvalido;
+                },
+              })}
+            />
+            {cpfError && (
+              <p id="cpf-erro" role="alert" className="text-sm text-error-fg">
+                {cpfError.message}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             {/* Era um campo de texto livre "separadas por vírgula" — o formato

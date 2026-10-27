@@ -8,6 +8,144 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.92.0] — 2026-10-27
+
+### Adicionado
+
+- **Dados lidos de documentos podem ser revisados antes de preencher o card** O assistente pode propor valores para os campos do negócio a partir de um
+  documento que leu. O dossiê mostra o valor atual, a proposta e o trecho de origem;
+  quem atende confirma, corrige ou descarta cada campo. As sugestões vencem após
+  sete dias. A confirmação conserva os números mostrados e a anonimização também
+  remove o motivo livre de recusa. Contribuição de @webtecnica, adaptada pela
+  manutenção a partir do PR #3471.
+
+- **O curso ganha histórias visuais para apresentar o sistema por tipo de negócio** O material público reúne exemplos de atendimento em dez setores, com cenas para
+  apresentar ao cliente e links para aprender a montar cada operação. As imagens
+  mostram o sistema real com dados fictícios e distinguem os roteiros das provas
+  separadas do agente. Essa ampliação do curso não exige atualizar ou configurar a
+  instalação do CRM.
+
+### Corrigido
+
+- **Acesso à mídia das conversas respeita a organização ativa** A leitura dos anexos e a reprodução de áudio conferem a organização da mídia
+  antes de liberar o acesso. A atualização não exige configuração adicional.
+
+- **A validade padrão da proposta respeita os dias de calendário no horário de verão** Propostas criadas pelo agente ou pela API sem uma validade explícita passam a contar o prazo configurado em dias de calendário no fuso da organização. Quando o prazo atravessava a entrada ou a saída do horário de verão, uma proposta criada perto da meia-noite podia vencer um dia antes ou depois. Não é preciso mudar a configuração da instalação. Crédito: @samirhvbr.
+
+## [1.91.0] — 2026-10-26
+
+### ⚠️ Requer atenção
+
+- **A trava de número novo passa a segurar os retornos automáticos até você liberar o número na Central** Se algum número seu ainda não cumpre essas condições (em geral, o que começou a enviar há menos de 31 dias), os retornos automáticos dele param depois da atualização e esperam na fila, sem se perder. Abra a **Central**, procure o aviso "Número novo aguardando liberação (go-live)" e marque como resolvido quando o número estiver pronto para disparar. Nenhum arquivo precisa ser editado.
+
+### Adicionado
+
+- **A foto do contato também pode ser lida por chave de integração (escopo Ler contatos)** A API `GET /api/v1/contacts/{id}/avatar`, que antes só atendia a pessoa logada no painel, agora também atende um servidor que se apresenta com uma chave de integração (`dsk_…`) marcada com o escopo **Ler contatos** (`contacts:read`). É a mesma autenticação dupla das demais rotas da API v1: a organização vem da linha da chave no banco, nunca do endereço pedido, então uma chave de uma empresa não alcança o contato de outra. Chave sem o escopo é recusada 403, chave inválida ou vencida é recusada 401 e a cota por chave continua valendo, como em todas as portas que aceitam chave.
+
+  Nada muda para quem usa a tela: a sessão do navegador continua pelo caminho de sempre — o mesmo redirecionamento temporário para o arquivo, o mesmo `Cache-Control` privado e a mesma ausência de foto para contato anonimizado. A prova está na suíte nova da rota (14 casos, cobrindo os cinco critérios da issue) e numa entrada nova na lista de caminhos que o proxy deixa passar sem sessão; sem essa entrada a chave receberia 401 antes de chegar na rota.
+
+  Quem chama a rota continua sendo a própria tela (`components/inbox/ConversationListItem.tsx:337`, `components/voice/ActiveCallPanel.tsx:154`, `components/voice/IncomingCallBanner.tsx:91`); o consumidor novo é o servidor de quem pediu a issue, que mora fora deste repositório.
+
+  Contribuição de @webtecnica (#3420).
+
+- **O curso em imagens ensina Configurações e a administração da plataforma** O material público ganha lições sobre as configurações da empresa, da conta e da
+  instalação. O gerador usa fotos reais de uma empresa de demonstração, identifica
+  as versões fotografadas e recusa destaques fora da imagem. As sementes e a
+  captura são ferramentas de documentação em ambiente local; não alteram a
+  instalação de quem usa o CRM.
+
+- **O turco chega traduzido, ainda escondido enquanto as telas principais não são medidas** Entram a tradução completa da interface para o turco, o leitor dos catálogos de idioma em arquivo (`lib/i18n/traducoes/`) e as ferramentas de tradução por lotes. O turco entra em construção, como o chinês: não aparece no seletor de idioma, não pesa na carga das telas e nenhuma tela muda para quem usa português ou espanhol. Ele passa a aparecer quando existirem a carga por idioma e a régua de telas principais. Nada a fazer na atualização. Tradução de Agenterix (@nusretbayindir-stack).
+
+### Alterado
+
+- **Atrás do Traefik da hospedagem com Docker antigo, a atualização deixa o domínio fora do ar por segundos, não por meio minuto** Em servidores com o Traefik da hospedagem na frente (Hostinger, Coolify,
+  Dokploy) e Docker 24 ou mais antigo, o domínio respondia "404 page not found"
+  por 30 a 45 segundos depois de uma atualização, mesmo com o sistema já
+  pronto: a checagem de saúde que libera o tráfego só rodava a cada 30 segundos.
+  Ela passa a rodar a cada 10 segundos, e a janela cai para cerca de 10
+  segundos. Com Docker 25 ou mais novo, ou com o Caddy padrão do kit, nada muda.
+  O tempo para declarar o sistema fora do ar continua o mesmo, e nada muda na
+  versão do Docker que o servidor precisa. Obrigado, @jmpo.
+
+- **A trava de número novo passa a segurar os retornos automáticos até você liberar o número na Central** Todo número de WhatsApp conectado nasce com a trava de número novo, que deveria segurar os retornos automáticos (os acompanhamentos que o sistema manda por conta própria) até alguém liberar o número na Central. Ela não segurava nenhum: o retorno automático saía mesmo com o número ainda em aquecimento, que é o perfil que o WhatsApp bane. Agora ela segura. Responder quem escreveu continua funcionando normalmente.
+
+  Na atualização, a trava sai sozinha do número que já está formado: aquele em que o controle de ritmo de envio já não põe limite de aquecimento (o número declarado em uso há 31 dias ou mais em "Este número é usado desde", ou com "pular o aquecimento" ligado, ou com degraus próprios que já chegaram em "sem limite"), ou cuja primeira mensagem enviada saiu há 31 dias ou mais. Cada número solto fica registrado na auditoria com o motivo, e o item dele na Central é fechado. Uma trava por saúde ruim do número (muitos bloqueios ou pouca resposta) nunca é solta sozinha.
+
+  O item "Número novo aguardando liberação" na Central passa de informação para aviso e diz que os retornos automáticos daquele número estão parados até você liberar. Quando você libera, os retornos que estavam esperando voltam espaçados, um a cada 5 minutos por número e dentro da janela de envio, em vez de saírem todos de uma vez. Contribuição de @Sandersono (#2327), que achou e consertou a trava que não segurava.
+
+### Corrigido
+
+- **Enter salva o valor digitado nos campos personalizados de moeda** Ao pressionar Enter em um campo de moeda, o formulário agora recebe o valor
+  digitado antes de salvar, como já acontecia com o clique no botão. Isso corrige
+  a criação de leads com moeda obrigatória e evita perder alterações na ficha do
+  negócio e na edição do contato, inclusive ao digitar zero ou limpar o campo.
+
+  Relato e diagnóstico de @hudson-souza-mkt (#3428). Correção de @claudioghirellifh.
+
+- **Quem só lê um negócio consegue abrir seus anexos** Pessoas com acesso de leitura ao negócio também conseguem listar e abrir seus
+  anexos. Criar o negócio numa etapa que exige um arquivo deixa o envio para depois
+  da criação; a exigência continua valendo ao mover o negócio de etapa. Crédito:
+  @webtecnica, PR #3453.
+
+- **A assinatura por agente usa quem escreveu a mensagem** Com a assinatura por agente ligada, mensagens escritas pela IA nas automações e na Prospecção usam o nome do agente responsável. Antes, esses caminhos procuravam o nome usando o identificador da regra ou do candidato e acabavam na assinatura de reserva. A reserva continua valendo quando não há agente disponível.
+
+  Contribuição de @webtecnica (#3424, Refs #3373).
+
+- **O aviso de "Nova mensagem" não toca mais para o histórico importado** Ao confirmar a importação do histórico de um número do WhatsApp (Conexões › Histórico), cada mensagem antiga entrava no banco como mensagem nova e o app aberto avisava todas elas: toast, som e uma notificação "Nova mensagem" por linha do acervo, para toda pessoa da empresa. Importar milhares de mensagens dava milhares de avisos.
+
+  O aviso do navegador agora reconhece a marca que o importador grava em cada linha do histórico e fica calado para ela — a mesma marca que o envio para o celular já respeitava. Mensagem que chega de verdade continua avisando como antes, e a importação em si não muda: o histórico continua sendo gravado e aparecendo na conversa.
+
+  Nada a fazer na VPS. Contribuição de @webtecnica (#3454, #3427).
+
+- **Cancelar follow-up também no dossiê da espera longa e do roteiro em andamento** O dossiê de um acompanhamento passa a oferecer **Cancelar follow-up** também quando ele está numa espera longa (o nó Aguardar imune à resposta, que dorme até a data marcada) e quando é um roteiro de atendimento em andamento. Antes, esses dois casos apareciam na fila de Follow-ups com o botão e a rota aceitava o cancelamento, mas o dossiê — aberto justamente para decidir o que fazer com o acompanhamento — não tinha botão nenhum, e quem operava tinha de voltar para a fila. Agora o botão aparece nos mesmos status em que o cancelamento vale, e é a mesma ação de sempre: o acompanhamento vira Cancelado, não recebe mais mensagens e a espera longa não desperta na data marcada. Quem abriu o dossiê de um acompanhamento já encerrado continua sem o botão, e sem permissão de escrita ele também não aparece. Nada muda para quem só usa a fila.
+
+  Contribuição de @webtecnica (#3455, Refs #3434).
+
+- **O contato apagado a pedido não volta pela agenda do app WhatsApp Business** O contato que o titular pediu para apagar não volta mais ao cadastro quando alguém edita esse número na agenda do app em coexistência, nem na sincronização inicial dos contatos. Antes, a Meta entregava o contato da agenda, o CRM não achava a ficha — a anonimização zera o telefone — e criava outra, com o número e o nome do celular.
+
+  A sincronização de contatos agora pergunta, antes de gravar, se aquele número foi apagado a pedido, pela mesma regra que a importação do histórico já usava. Se foi, não cria nada. Se a pergunta falhar ou não responder sim ou não, também não cria: na dúvida, o contato fica fora, e o desfecho aparece no log do webhook como contato não sincronizado. Crédito: @webtecnica (#3432).
+
+- **O CSV de contatos preserva a data de nascimento** Exportar contatos em CSV e importá-los em outra instalação agora conserva a data de nascimento da ficha. A coluna `birthdate` leva a data no formato `AAAA-MM-DD`, sem mudar o dia por fuso horário, e fica vazia quando não há nascimento cadastrado. Crédito: @samirhvbr.
+
+- **Os controles do topo incluem o texto visível no nome acessível** O seletor de idioma e o menu da pessoa incluem o código do idioma e as iniciais
+  visíveis em seus nomes acessíveis. Quem usa comando de voz consegue acionar os
+  mesmos controles pelo texto que aparece na tela, sem mudança na aparência.
+
+- **Atualização de segurança de dependência HTTP** Atualiza uma dependência de leitura de requisições para a versão corrigida pelo fornecedor, sem exigir configuração adicional na instalação. Crédito: @holive.
+
+- **Envio em nome de uma pessoa pausa a IA como a resposta pelo Inbox** Quando uma integração autorizada envia uma mensagem em nome de alguém da equipe, a conversa passa a respeitar a mesma pausa de cinco minutos aplicada à resposta pelo Inbox. A IA deixa de responder junto com o atendente e volta ao terminar a pausa. Silêncios maiores já definidos são preservados.
+
+  Contribuição de @webtecnica (#3430, Refs #3421).
+
+- **A equipe recebe aviso quando o filtro de palavras impede a IA de atender** Uma mensagem que não combina com o filtro de palavras do agente volta a avisar a equipe conforme a fila da conversa. Antes, a presença do agente podia silenciar o aviso mesmo sem ele responder. Quando esse agente já respondeu no atendimento corrente, a conversa continua sem avisos duplicados. Mídia ainda sem texto e falhas de leitura preservam o aviso humano.
+
+  Contribuição de @webtecnica (#3426, Refs #3353).
+
+- **Editar o conteúdo de um material do acervo deixa de responder "salvo" sem salvar** No acervo de conhecimento, editar o conteúdo de um material que não é uma lista de perguntas e respostas — um documento, um catálogo — respondia que deu certo e não mudava nada: quem integra pela API achava que tinha trocado o texto do material e o assistente continuava respondendo o de antes. Agora esse pedido é recusado com uma mensagem que diz o que fazer (enviar o arquivo, ou esperar a rotina que alimenta aquele tipo), e nada é gravado — nem o nome novo que vinha junto no mesmo pedido, que antes ficava salvo mesmo com a recusa. Listas de perguntas e respostas continuam sendo editadas como sempre.
+
+  As quatro ações sobre material do acervo — criar, enviar arquivo, editar e arquivar — e o reindexar de um material passam a deixar registro na auditoria: quem fez, em que empresa, em qual material e quando. O registro guarda só identificadores e contagens, nunca o texto do material. É o que responde "quem arquivou o FAQ de trocas?". Nada a fazer na atualização. Contribuição de @webtecnica (#3435, #3437).
+
+- **Parar no Inbox cancela também o follow-up em espera longa** O painel da conversa volta a oferecer Parar para um acompanhamento em espera longa. A ação usa o cancelamento existente e impede que a espera volte a disparar na data marcada. A inscrição dormente continua permitindo iniciar outro fluxo, como antes.
+
+  Contribuição de @webtecnica (#3407, Refs #3375).
+
+- **A restauração recusa backups corrompidos antes de alterar os dados** Ao restaurar um backup, o kit confere o arquivo do banco e os snapshots presentes das sessões do WhatsApp e dos anexos antes de escrever ou apagar dados. Arquivos cortados ou corrompidos interrompem a operação sem alterar os destinos. Se a extração falhar depois dessa conferência, o comando informa a falha e que o banco já foi restaurado, sem terminar como sucesso nem recomendar repetir sobre o banco populado. Crédito: @samirhvbr.
+
+- **Uma falha ao ler a configuração de e-mail preserva a senha já gravada** Se o banco não responder ao consultar a senha SMTP existente, salvar a
+  configuração informa a falha e preserva o que já estava gravado. Uma tentativa
+  incompleta não substitui a senha por um valor vazio. Crédito:
+  @emersonalex2026-svg, PR #3445.
+
+- **O status da mensagem no WhatsApp não volta mais para trás, e bolha só com caractere invisível não sai** Avisos de entrega do WhatsApp que chegavam fora de ordem ou repetidos podiam fazer uma mensagem já lida aparecer como entregue, ou uma entregue aparecer como enviada. Agora o status só anda para a frente, e a hora de entrega e a de leitura são gravadas uma vez só.
+
+  Quando o WhatsApp devolve erro para uma mensagem que já tinha sido aceita, ela vira falha com a explicação certa, na bolha da conversa, em vez de voltar a "enviando" e disparar o alerta de "não chegou ao cliente". Uma resposta da IA feita só de caractere invisível deixa de sair como bolha em branco.
+
+  Uma confirmação posterior de entrega ou leitura continua corrigindo uma falha anterior. Um aviso de mensagem pendente ou apenas aceita pelo servidor não apaga a falha.
+
+  Não há nada a configurar na VPS (spec 28).
+
+  Contribuição de @paulolimajr77 (#3469), com adaptação da manutenção para preservar a recuperação por confirmação de entrega.
+
 ## [1.90.0] — 2026-10-26
 
 ### Adicionado
@@ -12940,7 +13078,9 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v1.90.0...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v1.92.0...HEAD
+[1.92.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.91.0...v1.92.0
+[1.91.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.90.0...v1.91.0
 [1.90.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.89.0...v1.90.0
 [1.89.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.88.0...v1.89.0
 [1.88.0]: https://github.com/melgarafael/DeskcommCRM/compare/v1.87.0...v1.88.0

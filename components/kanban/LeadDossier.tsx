@@ -12,7 +12,8 @@ import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
 import { ContatoDoNegocio } from "./ContatoDoNegocio";
 import { ConversaNoDossie } from "./ConversaNoDossie";
-import { LeadFieldsForm } from "./LeadFieldsForm";
+import { LeadFieldsForm, type ControleDosCamposDoNegocio } from "./LeadFieldsForm";
+import { RevisaoDoDocumento } from "./RevisaoDoDocumento";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
 import { PropostasDoNegocio } from "./PropostasDoNegocio";
@@ -100,6 +101,7 @@ export function LeadDossier({
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
   const campos = useRef<HTMLDivElement | null>(null);
+  const formulario = useRef<ControleDosCamposDoNegocio | null>(null);
   const timeline = useLeadTimeline(open ? lead.id : null, lead.contact_id);
   const { fechadas, alternar, abrir } = useSecoesRecolhidas();
   const timelineRecolhida = fechadas.has("linha-do-tempo");
@@ -132,6 +134,10 @@ export function LeadDossier({
   const podeEditarTarefas =
     (user.is_platform_admin && !user.support) ||
     (activeOrg ? ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent : false);
+  // Confirmar o que o documento disse é EDITAR O CARD: `agent`+, a MESMA régua
+  // que a rota de decisão exige (`requireRole("agent")`). Abaixo disso a fila
+  // ainda aparece — ler o que a IA leu é informação —, mas sem os botões.
+  const podeConfirmarDoDocumento = podeEditarTarefas;
 
   /**
    * As props da linha do tempo, montadas UMA vez e usadas nos dois estados da
@@ -260,7 +266,17 @@ export function LeadDossier({
           aoAlternar={alternar}
         >
           <div ref={campos}>
-            <LeadFieldsForm lead={lead} pipelineId={pipelineId} fieldDefs={fieldDefs} />
+            {/* ⚠️ A REVISÃO FICA AQUI, dentro do card, e é esta linha que o
+                mantenedor cobrou no #3415: a fila existia como API e não tinha
+                consumidor na tela — o mesmo que não existir. Acima do
+                formulário porque é o histórico do que o documento disse, e o
+                formulário é o destino do que for confirmado. */}
+            <RevisaoDoDocumento
+              leadId={lead.id}
+              podeDecidir={podeConfirmarDoDocumento}
+              aoDecidir={(confirmado) => formulario.current?.confirmarCampo(confirmado)}
+            />
+            <LeadFieldsForm lead={lead} pipelineId={pipelineId} fieldDefs={fieldDefs} controle={formulario} />
           </div>
         </SecaoDoDossie>
 
