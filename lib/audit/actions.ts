@@ -1313,6 +1313,10 @@ export const AUDIT_ACTIONS = [
   // interruptores, a antecedência e o opt-in de WhatsApp). O número NÃO entra:
   // é dado de contato, e o audit é trilha legível por quem administra.
   "user.task_reminder_prefs_updated",
+  // A pessoa gravou a própria lateral do Inbox (#3008): quais módulos aparecem
+  // e em que ordem. O metadata traz a ordem e os escondidos — é o que responde
+  // "por que a tela desta pessoa é diferente" sem arrastar nome nem telefone.
+  "user.inbox_modules_updated",
   // "Sincronizar agenda do celular" (#2736): o gesto de IMPORTAR em bloco a
   // agenda do aparelho pareado — mesmo porquê do `contacts.imported` de planilha
   // ("quem trouxe esta base, e quando"), agora com o número de qual conexão veio.

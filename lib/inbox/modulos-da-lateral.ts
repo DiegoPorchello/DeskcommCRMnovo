@@ -212,7 +212,8 @@ export function moverModulo(
     return modulos as ModuloDaLateral[];
   }
   const copia = [...modulos];
-  const [movido] = copia.splice(de, 1);
+  // `de` já passou pela faixa acima: o `splice` devolve exatamente um item.
+  const [movido] = copia.splice(de, 1) as [ModuloDaLateral];
   copia.splice(para, 0, movido);
   return copia;
 }

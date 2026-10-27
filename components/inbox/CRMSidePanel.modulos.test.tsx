@@ -70,7 +70,7 @@ const h = vi.hoisted(() => ({
   patch: vi.fn(),
   salvar: vi.fn(),
   capturado: { onDragEnd: null as ((r: unknown) => void) | null },
-  gravado: null as null | Array<{ id: string; visivel: boolean }>,
+  gravado: null as null | ModuloDaLateral[],
 }));
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
