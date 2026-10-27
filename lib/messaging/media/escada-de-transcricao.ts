@@ -72,6 +72,7 @@ import {
   OPENROUTER_ENDPOINT,
   cabecalhosDeAtribuicaoOpenRouter,
   createDefaultRegistry,
+  fetchDoProvedor,
 } from "@/lib/agent-engine/edge/llm/providers";
 import { env } from "@/lib/env";
 
@@ -137,6 +138,8 @@ export const MOTIVOS_DA_TRANSCRICAO = {
  * trocaria um modelo que funciona por um id que o catálogo dela não tem.
  */
 export const MODELO_DE_TRANSCRICACAO_OPENROUTER = "openai/whisper-large-v3";
+/** Multipart oficial: 25 MB. O teto global do Storage continua 50 MiB. */
+export const LIMITE_MULTIPART_OPENROUTER_BYTES = 25_000_000;
 
 /** O modelo de CONVERSA da organização, já resolvido pelo worker. */
 export interface ConversaDaOrganizacao {
@@ -288,18 +291,21 @@ export async function decidirTranscricao(entrada: {
   //     transcriber dos degraus 1 e 2, só que com a chave da conversa.
   const conversa = entrada.conversa;
   if (conversa?.apiKey && (conversa.provider ?? "").toLowerCase() === "openrouter") {
+    const endpoint = conversa.baseUrl || OPENROUTER_ENDPOINT;
     return {
       origem: "padrao_openrouter",
       transcriber: apiTranscriptionProvider({
         apiKey: conversa.apiKey,
-        baseUrl: conversa.baseUrl || OPENROUTER_ENDPOINT,
+        baseUrl: endpoint,
         model: MODELO_DE_TRANSCRICACAO_OPENROUTER,
         languages: idiomas,
         // Opcional na OpenRouter e só de atribuição (ranking/estatística de
         // les): os valores saem da INSTALAÇÃO, nunca literais aqui
         // (`providers.ts` é quem os lê).
         headers: cabecalhosDeAtribuicaoOpenRouter(),
-      }),
+        maxAudioBytes: LIMITE_MULTIPART_OPENROUTER_BYTES,
+        medirCustoEmUsd: true,
+      }, fetchDoProvedor(endpoint)),
       motivo: MOTIVOS_DA_TRANSCRICAO.openrouterDaConversa,
       // É ESTE anúncio — e não `whisper-1` — que a tela mostra: o provedor é
       // o da conversa, e o modelo é o do serviço de transcrição deles.

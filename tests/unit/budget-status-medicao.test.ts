@@ -198,7 +198,7 @@ describe("o furo de medição é medido, não presumido", () => {
       // uso... a parada pode não acontecer" a toda organização que recebeu um
       // áudio no mês — com o modelo do turno precificado e a parada funcionando.
       // `padrao_openrouter` (#3382) é o degrau 3: a própria OpenRouter
-      // transcreve em `/audio/transcriptions`, mesmo custo nulo por construção.
+      // transcreve em `/audio/transcriptions`; neste controle não informou custo.
       for (const origem of ["servico_da_instalacao", "padrao_openai_compativel", "padrao_openrouter"]) {
         expect(
           await avisa(semCusto({ purpose: PONTO_TRANSCRICAO_DE_AUDIO, origem_da_escolha: origem })),
