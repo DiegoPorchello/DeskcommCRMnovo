@@ -25,7 +25,7 @@
  *      no primeiro módulo novo.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
 
@@ -71,11 +71,16 @@ export function DialogoDosModulos({ modulos, onSalvos }: Props) {
   const [rascunho, setRascunho] = useState<ModuloDaLateral[]>(modulos);
   const [salvando, setSalvando] = useState(false);
 
-  // O rascunho nasce do GRAVADO a cada abertura: sair sem salvar não deixa
-  // resíduo para a próxima vez (o mesmo motivo do `useState` semeado por prop).
-  useEffect(() => {
-    if (aberto) setRascunho(modulos);
-  }, [aberto, modulos]);
+  /**
+   * O rascunho nasce do GRAVADO a cada abertura: sair sem salvar não deixa
+   * resíduo para a próxima vez. É no `onOpenChange` e não num `useEffect` que
+   * observa `aberto` — o efeito que chama `setState` síncrono redesenha duas
+   * vezes e é o que o `react-hooks/set-state-in-effect` cobra.
+   */
+  const aoMudarAbertura = useCallback((proximo: boolean) => {
+    if (proximo) setRascunho(modulos);
+    setAberto(proximo);
+  }, [modulos]);
 
   const alternar = useCallback((id: string, visivel: boolean) => {
     setRascunho((atual) => atual.map((m) => (m.id === id ? { ...m, visivel } : m)));
@@ -112,7 +117,7 @@ export function DialogoDosModulos({ modulos, onSalvos }: Props) {
   const escondidos = rascunho.filter((m) => !m.visivel).length;
 
   return (
-    <Dialog open={aberto} onOpenChange={setAberto}>
+    <Dialog open={aberto} onOpenChange={aoMudarAbertura}>
       <DialogTrigger asChild>
         <button
           type="button"
