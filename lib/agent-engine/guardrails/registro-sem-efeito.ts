@@ -97,10 +97,10 @@ const PATTERNS: readonly Padrao[] = [
   { re: new RegExp(`\\bregistrei\\b[^.!?\\n]{0,60}\\b${OBJETO}\\b`) },
   //     e a ordem inversa, menos comum mas medida em texto de WhatsApp: "seu interesse, eu registrei".
   { re: new RegExp(`\\b${OBJETO}\\b[^.!?\\n]{0,20}\\bregistrei\\b`), verbo: /\bregistrei\b/ },
-  // (2) estado CONSUMADO do objeto: "seu interesse está registrado", "o pedido ficou
-  //     registrado no sistema", "seus dados foram salvos".
+  // (2) estado afirmado no presente/passado. O particípio sozinho também aparece
+  //     em futuro/possibilidade ("será registrado", "pode ser registrado").
   {
-    re: new RegExp(`\\b${OBJETO}\\b[^.!?\\n]{0,30}\\b(?:registrad|anotad|guardad|salv|gravad)[oa]s?\\b`),
+    re: new RegExp(`\\b${OBJETO}\\b[^.!?\\n]{0,30}\\b(?:esta|estao|estava|estavam|ficou|ficaram|foi|foram)\\s+(?:registrad|anotad|guardad|salv|gravad)[oa]s?\\b`),
     verbo: /(?:registrad|anotad|guardad|salv|gravad)[oa]s?\b/,
   },
   // (3) "já está registrado" — a forma que a issue lista como medida, sem objeto explícito.

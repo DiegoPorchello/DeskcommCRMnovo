@@ -223,10 +223,10 @@ export const CONFERENCIAS_DE_SAIDA: readonly ConferenciaDeSaida[] = [
   },
   {
     nome: "registro_sem_efeito",
-    rotulo: "Só dizer que registrou o interesse depois de registrar",
+    rotulo: "Conferir a escrita antes de afirmar registro",
     oQueProtege:
-      'Barra o "já registrei seu interesse" quando a ficha não foi criada de verdade nesta ' +
-      "conversa: o cliente ouve que alguém vai chamá-lo, mas ninguém foi avisado.",
+      "Recusa a confirmação de registro quando a ferramenta não confirmou nenhuma escrita " +
+      "neste turno. O controle ainda não identifica a qual item cada escrita se refere.",
     escolha: null,
     porQueNaoSeDesliga:
       "É a mesma promessa vazia do 'vou pedir pro responsável': o cliente fica esperando um " +

@@ -845,9 +845,9 @@ export const agendaStallGate: Gate = {
 };
 
 /**
- * Gate 6.95 — REGISTRO AFIRMADO SEM EFEITO (#3333): a garantia DURA de que "já registrei seu
- * interesse" (ou "está registrado") só sai depois que a escrita de registro **produziu
- * efeito** neste turno.
+ * Gate 6.95 — REGISTRO AFIRMADO SEM EFEITO (#3333): sem nenhum efeito confirmado
+ * da ferramenta neste turno, a afirmação correspondente é recusada. O coletor
+ * agrega nomes de ferramentas; não vincula a fala a um objeto específico.
  *
  * ─── O defeito, medido ───────────────────────────────────────────────────────
  *
@@ -1329,6 +1329,8 @@ export interface RunBeforeSendArgs {
   agenda?: GateContext['agenda'];
   /** Ver `GateContext.followup`. Ausente = o `casePromiseGate` não alivia nada. */
   followup?: GateContext['followup'];
+  /** Coletor do mesmo turno: sem efeito confirmado, não afirmar registro. */
+  registro?: GateContext['registro'];
   /**
    * Pausa humana do turno, paga ANTES de o guardrail tomar conexão/transação
    * (issue #654) — o porquê está no corpo de `runBeforeSend`. Ausente (default)
@@ -1664,6 +1666,7 @@ export async function runBeforeSend(args: RunBeforeSendArgs): Promise<BeforeSend
       commercialRestrictionEnforced: restricaoComercial,
       ...(args.agenda !== undefined ? { agenda: args.agenda } : {}),
       ...(args.followup !== undefined ? { followup: args.followup } : {}),
+      ...(args.registro !== undefined ? { registro: args.registro } : {}),
     };
 
     const { body: evaluatedBody, trace: traceDaCadeia, veto, throttleWaitMs } = evaluateBeforeSend(ctx, gates);

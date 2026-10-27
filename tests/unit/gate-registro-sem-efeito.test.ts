@@ -162,6 +162,8 @@ describe("registroSemEfeitoGate — o que NÃO é afirmação de registro", () =
     "Ainda não registrei seu interesse — vou passar para a equipe e te confirmo.",
     "Não consegui registrar seu interesse agora, mas já pedi para a equipe te chamar.",
     "Vou registrar seu interesse na unidade 2 e te aviso.",
+    "Seu interesse será registrado.",
+    "Seu interesse pode ser registrado.",
     "Se eu registrar seu interesse, você prefere que a equipe ligue de manhã?",
     "Registrei sua visita para sábado às 10h.",
     "O sistema registra tudo automaticamente.",

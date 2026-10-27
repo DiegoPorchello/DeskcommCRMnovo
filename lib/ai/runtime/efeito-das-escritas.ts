@@ -45,6 +45,9 @@
  * EFEITO é MONOTÔNICO no turno: uma vez produzido, um erro posterior da mesma ferramenta não
  * apaga o registro que já existe no banco. Por isso `registrar` ignora desfechos posteriores
  * a um `produziu_efeito` — a pergunta é "existe efeito?", não "qual foi a última tentativa?".
+ * O mapa guarda NOMES, não argumentos/objetos. A sucesso seguido de B falha na
+ * mesma ferramenta continua lendo efeito; isso não comprova o registro de B.
+ * Essa lacuna permanece na #3333, sem uma expectativa que a legitime como correta.
  *
  * Puro de propósito: sem I/O, sem banco, sem relógio. Quem cria é o turno
  * (`inbound-turn.ts`), quem alimenta é a ponte (`lib/ai/runtime/tools.ts`), quem lê é o gate.
