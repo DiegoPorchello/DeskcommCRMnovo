@@ -169,8 +169,10 @@ test("viewer continua sem acesso à API Central e bearer não autentica", async 
 });
 
 // Mesmo fixture, organização própria desta spec; nada muda na organização comum do CI.
-test("devolver ao automático recusa colega e respeita o CAS real do banco", async ({ page, browser }, info) => {
+test("devolver ao automático recusa colega e respeita o CAS real do banco", async ({ page, browser }) => {
   test.setTimeout(180_000);
+  const evidencia = "evidence/atendimento-cercas";
+  mkdirSync(evidencia, { recursive: true });
   const org = orgs[0]!;
   const conversa = conversations[2]!;
   const colega = users.find(u => u.role === "other")!;
@@ -207,7 +209,7 @@ test("devolver ao automático recusa colega e respeita o CAS real do banco", asy
     expect((await resposta).status()).toBe(403);
     await expect(page.getByText("Esta conversa é de outro atendente. Peça a um gerente ou assuma a conversa.")).toBeVisible();
     expect(await estado()).toMatchObject({ assigned_to_user_id: colega.id, bot_silenced_until: "infinity" });
-    await page.screenshot({ path: info.outputPath("devolucao-colega-recusada.png"), fullPage: true });
+    await page.screenshot({ path: `${evidencia}/devolucao-colega-recusada.png`, fullPage: true });
 
     // Controle pelo mesmo botão: a pessoa dona da conversa consegue devolver.
     const propria = await contexto.newPage();
@@ -220,7 +222,7 @@ test("devolver ao automático recusa colega e respeita o CAS real do banco", asy
     const contato = await db.from("contacts").select("force_human").eq("organization_id", org).eq("id", contacts[2]!).single();
     expect(contato.error).toBeNull();
     expect(contato.data!.force_human).toBe(false);
-    await propria.screenshot({ path: info.outputPath("devolucao-pelo-dono.png"), fullPage: true });
+    await propria.screenshot({ path: `${evidencia}/devolucao-pelo-dono.png`, fullPage: true });
   } finally {
     await contexto.close();
     expect((await db.from("organizations").update({ settings: { visibility_mode: "own_and_unassigned" } }).eq("id", org)).error).toBeNull();

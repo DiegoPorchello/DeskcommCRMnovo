@@ -203,7 +203,11 @@ test("o código aparece; expirar o QR sem parear libera a vaga e permite retomar
     const reaberto = await page.request.get("/api/v1/onboarding/whatsapp/session");
     expect(reaberto.status()).toBe(200);
     expect((await reaberto.json()).data.status).toBe("NOT_STARTED");
+    const listaAposExpirar = page.waitForResponse(r => new URL(r.url()).pathname === "/api/v1/channel-sessions" && r.request().method() === "GET");
     await page.goto("/app/connections");
+    expect((await listaAposExpirar).status()).toBe(200);
+    await expect(page.getByText("Carregando conexões…", { exact: true })).toBeHidden();
+    await expect(page.getByRole("main").getByText("Conecte seu primeiro número de WhatsApp para começar a atender.", { exact: true })).toBeVisible();
     await expect(page.getByText("Recepção", { exact: true })).toHaveCount(0);
     await page.screenshot({ path: `${EVIDENCIA}/expiracao-nao-deixa-canal-caido.png`, fullPage: true });
 
@@ -215,8 +219,12 @@ test("o código aparece; expirar o QR sem parear libera a vaga e permite retomar
     expect(retomar.status(), await retomar.text()).toBe(200);
     expect((await retomar.json()).data.channel_session_id).toBe(canal);
     expect(await lerCanal()).toMatchObject({ id: canal, archived_at: null, status: "SCAN_QR_CODE" });
+    const listaAposRetomar = page.waitForResponse(r => new URL(r.url()).pathname === "/api/v1/channel-sessions" && r.request().method() === "GET");
     await page.reload();
-    await expect(page.getByText("Recepção", { exact: true })).toBeVisible();
+    expect((await listaAposRetomar).status()).toBe(200);
+    await expect(page.getByText("Carregando conexões…", { exact: true })).toBeHidden();
+    // O banner também nomeia Recepção; a prova precisa encontrar o card no main.
+    await expect(page.getByRole("main").getByText("Recepção", { exact: true })).toBeVisible();
     await page.screenshot({ path: `${EVIDENCIA}/mesmo-canal-retomado.png`, fullPage: true });
   } finally {
     await new Promise<void>((resolve) => upstream.close(() => resolve()));

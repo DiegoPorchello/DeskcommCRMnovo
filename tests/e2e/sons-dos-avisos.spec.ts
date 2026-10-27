@@ -229,8 +229,10 @@ test("com o site aberto, o aviso NOVO que pede gente toca; o antigo não", async
 
 // O gatilho real emite o evento e o Realtime entrega um primeiro UPDATE sem
 // histórico na aba. O teste não injeta callback, payload de socket nem toast.
-test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no app", async ({ page }, info) => {
+test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no app", async ({ page }) => {
   test.setTimeout(180_000);
+  const evidencia = path.join(process.cwd(), "evidence", "atendimento-cercas");
+  fs.mkdirSync(evidencia, { recursive: true });
   async function inserir(tabela: string, valores: Record<string, unknown>): Promise<string> {
     const r = await db.from(tabela).insert(valores).select("id").single();
     if (r.error) throw r.error;
@@ -288,7 +290,7 @@ test("atribuição, ganho e perda sem histórico chegam do banco e aparecem no a
       // carimbos reais dos dois transportes, inclusive a precisão do Postgres.
       const aviso = page.locator("[data-sonner-toast]").filter({ hasText: titulo }).filter({ hasText: nome });
       await expect(aviso).toBeVisible({ timeout: ESPERA });
-      await page.screenshot({ path: info.outputPath(`aviso-${status}-sem-historico.png`), fullPage: true });
+      await page.screenshot({ path: path.join(evidencia, `aviso-${status}-sem-historico.png`), fullPage: true });
     }
   } finally {
     if (criados.length) expect((await db.from("crm_leads").delete().eq("organization_id", orgId).in("id", criados)).error).toBeNull();
