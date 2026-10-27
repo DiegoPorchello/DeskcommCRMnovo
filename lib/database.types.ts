@@ -10368,11 +10368,48 @@ export type Database = {
           },
         ];
       };
+      message_template_groups: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          ordem: number;
+          organization_id: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          ordem?: number;
+          organization_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          ordem?: number;
+          organization_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "message_template_groups_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       message_templates: {
         Row: {
           body: string;
           created_at: string;
           created_by_user_id: string | null;
+          grupo_id: string | null;
           id: string;
           midias: NonNullable<Json>;
           mostrar_na_barra: boolean;
@@ -10388,6 +10425,7 @@ export type Database = {
           body: string;
           created_at?: string;
           created_by_user_id?: string | null;
+          grupo_id?: string | null;
           id?: string;
           midias?: NonNullable<Json>;
           mostrar_na_barra?: boolean;
@@ -10402,6 +10440,7 @@ export type Database = {
           body?: string;
           created_at?: string;
           created_by_user_id?: string | null;
+          grupo_id?: string | null;
           id?: string;
           midias?: NonNullable<Json>;
           mostrar_na_barra?: boolean;
@@ -10413,6 +10452,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "message_templates_grupo_fkey";
+            columns: ["organization_id", "grupo_id"];
+            isOneToOne: false;
+            referencedRelation: "message_template_groups";
+            referencedColumns: ["organization_id", "id"];
+          },
           {
             foreignKeyName: "message_templates_organization_id_fkey";
             columns: ["organization_id"];
