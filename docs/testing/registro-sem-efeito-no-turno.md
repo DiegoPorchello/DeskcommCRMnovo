@@ -35,6 +35,14 @@ O conjunto focado passou com 82 casos em sete arquivos, um worker. A prova
 controlada complementa os testes puros e as cercas de fonte do autor; não
 substitui o CI do head publicado nem mede um turno completo com modelo.
 
+A prova visual específica está preparada no caso existente “o papel que confere
+mostra a lista inteira, aberta, e sem interruptor decorativo”, em
+`agente-papeis-operador.spec.ts` (parte 1 do CI). O caso usa o login e o agente
+semeado reais da spec, confere a linha, o motivo fixo e zero interruptores, e
+salva `evidence/registro-no-envio/linha-fixa.png` após as asserções. Não usa
+`page.route`. A coleta local não executa login, seed nem navegador; a imagem
+ainda depende da execução do novo head pelo CI.
+
 ## Lacuna mantida na issue
 
 Um turno pode chamar `crm_create_lead` para títulos ou funis diferentes. Se A
