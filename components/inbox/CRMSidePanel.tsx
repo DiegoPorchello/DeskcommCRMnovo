@@ -45,6 +45,8 @@ import { cn } from "@/lib/utils";
 import { PROXIMO_PASSO_DA_MENSAGEM_NOVA } from "@/lib/atendimento/proximo-passo-padrao";
 import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { AtalhosDoNegocio } from "@/components/kanban/AtalhosDoCard";
+import type { AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
 
 interface Props {
   conversation: ConversationWithContact | null;
@@ -80,6 +82,12 @@ interface LeadRow {
   /** As etapas ativas do funil, na ordem do quadro (rota crm-summary). */
   etapas_do_funil?: Array<{ id: string; name: string; is_won: boolean; is_lost: boolean }>;
   motivos_de_perda?: string[];
+  /**
+   * Os atalhos do card do funil deste negócio (#3487) — o MODELO de link, como
+   * está em `crm_pipelines.settings.atalhos`. O painel do Inbox não tem o quadro
+   * em cache, então a rota `crm-summary` manda junto.
+   */
+  atalhos?: AtalhoDoCard[];
 }
 
 interface OrderRow {
@@ -911,6 +919,13 @@ export function CRMSidePanel({ conversation, recolhido = false, onAlternarRecolh
    * `InboxLeadEditor` mostra como ativo.
    */
   const negocioAtivoId = leadAtivoId ?? leads?.[0]?.id ?? null;
+  /**
+   * O negócio ATIVO, a LINHA (não só o id): os atalhos do card (#3487) precisam
+   * do `custom_fields` dele para `{{erp_id}}` e afins. Mesma escolha do
+   * `InboxLeadEditor`, para os dois não apontarem para negócios diferentes na
+   * mesma tela.
+   */
+  const negocioAtivo = (leads ?? []).find((l) => l.id === negocioAtivoId) ?? leads?.[0] ?? null;
 
   /**
    * RECOLHIDO (issue #3004): só o trilho, com o botão de expandir. Sem o
@@ -977,6 +992,17 @@ export function CRMSidePanel({ conversation, recolhido = false, onAlternarRecolh
           {contact?.phone_number && (
             <div className="text-xs text-muted-foreground">{phoneForDisplay(contact.phone_number)}</div>
           )}
+          {/*
+            OS ATALHOS DO CARD (#3487), logo abaixo do telefone — que é o dado
+            que eles usam. `tel:` aqui é o caso (a) da issue: um clique disca no
+            softphone do PABX, em vez de copiar o número e colar. Sem atalho
+            configurado no funil, nada aparece; o espaçamento da `Card` não muda.
+          */}
+          <AtalhosDoNegocio
+            atalhos={negocioAtivo?.atalhos}
+            lead={negocioAtivo}
+            contactId={contactId}
+          />
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {tags.map((t) => (
