@@ -26,6 +26,7 @@ import * as path from "node:path";
 import { test, expect, type Page, type Locator } from "./helpers/test";
 import { carregarEnvLocal, credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 import { resultadoParaRecibo } from "../../lib/automation/resultado-para-recibo";
+import { slugDeFunil } from "../../lib/pipelines/pipeline-editing";
 
 // Segue o dev server do harness (playwright.config webServer) — nunca hardcodar
 // porta: o config usa E2E_PORT (default 3001).
@@ -447,7 +448,7 @@ test.describe("#3267 — uma vez por contato e o mesmo recibo nos dois leitores"
     };
     try {
       conferir(await admin.from("organizations").insert({ id: outroOrg, slug: `uma-vez-${outroOrg}`, legal_name: "Empresa sintética B", display_name: "Empresa sintética B" }));
-      conferir(await admin.from("crm_pipelines").insert({ id: pipeline, organization_id: org, name: nome, slug: `uma-vez-${pipeline}` }));
+      conferir(await admin.from("crm_pipelines").insert({ id: pipeline, organization_id: org, name: nome, slug: slugDeFunil(nome) }));
       conferir(await admin.from("crm_stages").insert({ id: stage, organization_id: org, pipeline_id: pipeline, name: "Entrada", slug: "entrada", position: 1 }));
       conferir(await admin.from("contacts").insert(contatos.map((id, i) => ({ id, organization_id: org, name: `Contato sintético ${i}` }))));
       await login(page, creds.users.manager!.email);
