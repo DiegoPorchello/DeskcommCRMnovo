@@ -60,7 +60,7 @@ export type LeituraDoEfeito = DesfechoDaEscrita | "nao_tentada";
  * O coletor do turno. Uma instância por turno/run — nunca compartilhada entre eles: o efeito
  * é do TURNO (a fala que sai agora), e um coletor de processo juntaria turnos diferentes.
  */
-export interface EfeitoDasEscritas {
+export interface EfeitoDasEscrituras {
   /** Chamado UMA vez por saída da ponte, com o desfecho que ela já decidiu para o audit. */
   registrar(ferramenta: string, desfecho: DesfechoDaEscrita): void;
   /** O desfecho registrado — `nao_tentada` quando nenhuma chamada daquela ferramenta saiu. */

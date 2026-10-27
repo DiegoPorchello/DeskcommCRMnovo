@@ -33,7 +33,7 @@ import type { McpContext, McpToolDefinition } from "@/lib/mcp/types";
 import { resolveActiveLeadForContact, type LeadCandidate } from "@/lib/leads/active-lead";
 import { podeChamarFerramenta, recusaParaOModelo } from "@/lib/leads/escopo-de-funil";
 import { escritaCabeNoTurno } from "./escopo-das-escritas";
-import type { DesfechoDaEscrita, EfeitoDasEscritas } from "./efeito-das-escritas";
+import type { DesfechoDaEscrita, EfeitoDasEscrituras } from "./efeito-das-escritas";
 import {
   chaveDaEscritaDoNegocio,
   criarFilaDeEscritasDoNegocio,
@@ -111,7 +111,7 @@ export interface PickToolsInput {
    * registra desfecho. A direção segura aqui é NÃO registrar — o que desarma um gate,
    * nunca libera uma escrita.
    */
-  efeitos?: EfeitoDasEscritas;
+  efeitos?: EfeitoDasEscrituras;
 }
 
 /**
