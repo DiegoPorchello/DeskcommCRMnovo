@@ -171,6 +171,26 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
       await expect(contato(2)).toBeVisible();
       await expect(contato(3)).toHaveCount(0);
       await captura(page, "3507-02-filtro-real-preserva-os-contatos");
+
+      // A prova nova terminou. Restaura só a fixture para os casos anteriores,
+      // que continuam esperando o nome minúsculo depois do renome real.
+      const restauracao = await page.request.post("/api/v1/tags/vocabulario", {
+        data: { acao: "renomear", tag: nomeDigitado, destino: novo },
+        timeout: 5_000,
+      });
+      expect(restauracao.status()).toBe(200);
+      const prazoDoSnapshot = AbortSignal.timeout(5_000);
+      const [aposContatos, aposRegra] = await Promise.all([
+        admin.from("contacts").select("id, tags").eq("organization_id", c.org_id)
+          .in("id", contatos).abortSignal(prazoDoSnapshot),
+        admin.from("automation_rules").select("actions").eq("organization_id", c.org_id)
+          .eq("id", regraId).abortSignal(prazoDoSnapshot).single(),
+      ]);
+      expect(aposContatos.error).toBeNull();
+      expect(aposRegra.error).toBeNull();
+      expect(aposContatos.data?.sort((a, b) => a.id.localeCompare(b.id)))
+        .toEqual([...(cts ?? [])].sort((a, b) => a.id.localeCompare(b.id)));
+      expect(aposRegra.data?.actions).toEqual(regra?.actions);
     }, { timeout: 30_000 });
     registra("#3507 etapa adicional ms=" + Math.ceil(performance.now() - inicioDaConferenciaDeCaixa));
   });
