@@ -133,6 +133,46 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     expect((regra as { actions: unknown[] }).actions).toHaveLength(1);
     await expect(page.getByRole("row", { name: new RegExp(novo) })).toBeVisible({ timeout: 30_000 });
     await captura(page, "955-04-renomeada-na-tela");
+
+    // #3507: preserva o controle anterior de renome real e mede a troca só de caixa.
+    const inicioDaConferenciaDeCaixa = performance.now();
+    await test.step("renomear só na caixa conserva os contatos no filtro real", async () => {
+      const nomeDigitado = novo.toUpperCase();
+      await page.getByRole("row", { name: new RegExp(novo) }).getByRole("button", { name: "Renomear" }).click();
+      await expect(page.getByText("Renomear " + novo + " para:")).toBeVisible();
+      await page.getByLabel("Novo nome").fill(nomeDigitado);
+      const [renome] = await Promise.all([
+        page.waitForResponse((resposta) => {
+          const url = new URL(resposta.url());
+          return url.pathname === "/api/v1/tags/vocabulario" && resposta.request().method() === "POST";
+        }),
+        page.getByRole("button", { name: "Confirmar" }).click(),
+      ]);
+      expect(renome.status()).toBe(200);
+      await expect(page.getByRole("row", { name: new RegExp(nomeDigitado) })).toBeVisible();
+      await captura(page, "3507-01-nome-de-exibicao-com-caixa");
+
+      await page.goto("/app/contacts");
+      await page.getByPlaceholder("Buscar por nome, email ou telefone…").fill("Tagueado " + SUFIXO);
+      const contato = (numero: number) => page.getByRole("row", { name: new RegExp("Tagueado " + SUFIXO + " " + numero + "\\b") });
+      // O controle sem etiqueta precisa existir ANTES e sumir DEPOIS do filtro.
+      for (const numero of [1, 2, 3]) await expect(contato(numero)).toBeVisible();
+      await page.getByRole("button", { name: "Tag: todas", exact: true }).click();
+      const [filtro] = await Promise.all([
+        page.waitForResponse((resposta) => {
+          const url = new URL(resposta.url());
+          return url.pathname === "/api/v1/contacts" && url.searchParams.getAll("tag").includes(novo) && resposta.request().method() === "GET";
+        }),
+        page.getByRole("menuitemcheckbox", { name: novo, exact: true }).click(),
+      ]);
+      expect(filtro.status()).toBe(200);
+      await page.keyboard.press("Escape");
+      await expect(contato(1)).toBeVisible();
+      await expect(contato(2)).toBeVisible();
+      await expect(contato(3)).toHaveCount(0);
+      await captura(page, "3507-02-filtro-real-preserva-os-contatos");
+    }, { timeout: 30_000 });
+    registra("#3507 etapa adicional ms=" + Math.ceil(performance.now() - inicioDaConferenciaDeCaixa));
   });
 
   test("juntar duas etiquetas não deixa a etiqueta repetida (J24.2)", async ({ page }) => {
