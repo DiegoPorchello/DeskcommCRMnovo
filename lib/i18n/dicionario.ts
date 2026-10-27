@@ -9942,6 +9942,7 @@ export const DICIONARIO: Traducoes = {
     es: "Informe de exportación disponible (expira en 72h).",
   },
   "Baixar PDF": { es: "Descargar PDF" },
+  "Baixar arquivo de dados (data.json)": { es: "Descargar archivo de datos (data.json)" },
   "Linha do tempo SLA": { es: "Línea de tiempo SLA" },
   "SLA não definido.": { es: "SLA no definido." },
   "ID completo": { es: "ID completo" },
