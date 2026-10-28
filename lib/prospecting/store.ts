@@ -24,7 +24,7 @@ import {
 import { CanalReconectandoError, ProspectingError } from "./provider";
 import { audit } from "@/lib/audit";
 import { vereditoPuro } from "./site-classify";
-import { completarLinksDoContato, linksDoCandidato } from "./links-do-candidato";
+import { linksDoCandidato } from "./links-do-candidato";
 import { aplicarLinks } from "@/lib/leads/links-de-contato";
 import { logger } from "@/lib/logger";
 import { pedidoDaProspeccao } from "./pedido-da-prospeccao";
@@ -537,19 +537,11 @@ export async function criarPegadaDoCandidato(
       "update prospecting_candidates set contact_id=$3 where organization_id=$1 and id=$2",
       [org, p.id, contactId],
     );
-  } else {
-    // Spec 26 §3.3: o contato que já existe (criado antes, ou reaproveitado da campanha)
-    // também recebe os links que faltam, pela mesma instrução atômica do botão "Completar
-    // fichas". Fail-open: falha aqui não derruba a abordagem.
-    try {
-      await completarLinksDoContato(db, org, contactId, linksDoCandidato(p.data));
-    } catch (error) {
-      logger.warn("[prospecting] não foi possível completar os links do contato; a abordagem segue", {
-        candidate_id: p.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
+  // Contato que já existe (criado antes, ou reaproveitado da campanha) NÃO é tocado aqui.
+  // Decisão do dono (spec 26 §7.1): ficha que já existe só recebe links pelo botão
+  // "Completar fichas"; preencher sozinho a cada envio traria de volta um link que a pessoa
+  // apagou. O contato novo, acima, continua nascendo com os links.
   let leadId = p.lead_id;
   if (!leadId) {
     const existing = await db.query(

@@ -4,7 +4,7 @@ parent: 00-prd-master.md
 type: spec
 scope: prospecção, contatos
 status: approved
-version: 0.3.0
+version: 0.3.1
 owner: arquitetura
 created_at: 2026-10-23
 related:
@@ -96,8 +96,10 @@ até 1000 caracteres. O que a função recusar simplesmente não entra. Lista de
   `lib/leads/links-de-contato.ts`, é o que monta as chaves `link_<tipo>`). `createContactHandler` só
   confere os padrões que o funil define para o escopo "contato" e pula chave sem definição
   (`recusasDePadrao`), então `link_*` não é recusada.
-- **Contato reaproveitado** (`contatoDaCampanha ?? p.contact_id`): o `createContactHandler` não roda;
-  aplica-se o SQL atômico da §3.3, que só acrescenta o link ausente.
+- **Contato reaproveitado** (`contatoDaCampanha ?? p.contact_id`): NÃO é tocado na abordagem; nada é
+  gravado nele ao enviar. O `createContactHandler` não roda, e o SQL da §3.3 não entra aqui. Motivo: um
+  link que a pessoa apagou voltaria a cada envio. Ele só recebe os links que faltam pelo botão
+  "Completar fichas" (§3.3, decisão §7.1).
 
 O SQL da §3.3 vira um helper único (ex.: `completarLinksDoContato(db, org, contactId, links)`), nascido
 no commit 1 e reusado pela ação do commit 3. Os dois chamadores de `criarPegadaDoCandidato` (modo
@@ -118,11 +120,15 @@ update contacts
    set custom_fields = $links::jsonb || coalesce(custom_fields, '{}'::jsonb), updated_at = now()
  where organization_id = $org and id = $contato
    and not is_anonymized and is_merged_into is null
-   and not (coalesce(custom_fields,'{}'::jsonb) @> $links::jsonb)
+   and not (coalesce(custom_fields,'{}'::jsonb) ?& $chaves::text[])
 ```
 
-No `||` a chave da direita vence, então a que a pessoa digitou fica; a que falta entra; e a cláusula
-`not (… @> …)` pula quem já está completo (rodada vazia não escreve). `updated_at = now()` é necessário:
+No `||` a chave da direita vence, então a que a pessoa digitou fica; a que falta entra. A cláusula
+`not (… ?& …)` pula quem já tem todas as chaves (rodada vazia não escreve), e o critério é a
+**existência** da chave, não o valor: com `@>`, um link que a pessoa digitou com outro endereço nunca
+"batia" com o da busca, e a ficha seria regravada a cada clique. `$chaves` são as chaves de `$links`.
+O botão traz de volta um link que a pessoa apagou (a chave some quando o campo fica vazio); é o
+significado de "completar", e acontece só quando alguém clica. `updated_at = now()` é necessário:
 a aba Links remonta o formulário por `contato.updated_at` (`ContatoDoNegocio.tsx`).
 
 **A ação:** `completar_fichas` em `app/api/v1/prospecting/route.ts`, pelo mesmo caminho das vizinhas
@@ -139,8 +145,9 @@ sem_links }`, sem endereços no log. Toda leitura e escrita filtra `organization
 pelo mesmo `perform(...)`, com mensagem "Fichas completadas: N". Sem contador (o servidor é quem sabe
 quem falta). Textos novos entram nas traduções que o teste de cobertura exigir.
 
-O mesmo SQL atende o contato reaproveitado em `criarPegadaDoCandidato` (`contatoDaCampanha` /
-`p.contact_id`). Não há migration: nada de SQL de dados que duplique em SQL a regra de hosts.
+O contato reaproveitado em `criarPegadaDoCandidato` (`contatoDaCampanha` / `p.contact_id`) **não**
+passa por este SQL na abordagem (§3.2, §7.1): só pelo botão. Não há migration: nada de SQL de dados
+que duplique em SQL a regra de hosts.
 
 ### 3.4 A ficha mostra os links
 `app/app/contacts/[id]/_client.tsx`, aba "Visão geral", dentro do `<dl>`, logo depois do bloco
@@ -177,7 +184,7 @@ API**. (O #3259, que tocava este arquivo, já entrou na main.)
 ## 6. Testes e prova
 - **Unit do mapeador** (`lib/prospecting/links-do-candidato.test.ts`): website Instagram → `instagram` e **não** `site`; site próprio → `site`; agregador → `outro`; `socials` vence o `website`; `javascript:` e endereço >1000 caracteres descartados; `data` vazio → `{}`; Maps → `google_meu_negocio`.
 - **Ligação** (`tests/unit/prospeccao-funil-no-envio.test.ts`, bloco `criarPegadaDoCandidato`): o `createContactHandler` recebe `custom_fields` com os links. Sabotar **o mapeador, a regra de hosts E cada ponto de chamada** (os dois chamadores), um por vez, e prever os vermelhos antes.
-- **Completar, no banco (invariante, `pnpm test:db` no CI):** o SQL atômico da §3.3 com (a) chave que a pessoa digitou preservada, (b) chave ausente adicionada, (c) segunda rodada sem escrever nada (`updated_at` não muda), (d) contato **anonimizado** intocado, (e) contato de **outra organização** intocado, (f) o `custom_fields` com campos que não são `link_*` preservados. Sabotar o operador `||` (inverter a ordem) e prever o vermelho de (a).
+- **Completar, no banco (invariante, `pnpm test:db` no CI):** o SQL atômico da §3.3 com (a) chave que a pessoa digitou preservada, (b) chave ausente adicionada, (c) segunda rodada sem escrever nada (`updated_at` não muda), (d) contato **anonimizado** intocado, (e) contato de **outra organização** intocado, (f) o `custom_fields` com campos que não são `link_*` preservados, (g) contato **mesclado** intocado. Sabotar o operador `||` (inverter a ordem) e prever o vermelho de (a).
 - **A ação:** rota recusa `completar_fichas` por token (403) e aceita por sessão; devolve as contagens; audita sem endereços; `faltam` > 0 quando passa de 100.
 - **A tela:** o botão chama a ação e mostra a mensagem; fica desabilitado enquanto ocupado.
 - **Dados reais, sem escrita:** rodar o mapeador sobre os 197 candidatos da PLJR e conferir a contagem esperada: site próprio ≈ 72, Instagram **no mínimo 61** (as redes de `socials` mais os 41 `website` que são Instagram, menos a sobreposição), Facebook no mínimo 33, LinkedIn 8, Maps 197. Os números de site, Instagram e agregador da §1 vêm de uma classificação aproximada por expressão no SQL, não do código TypeScript; este teste é o que os confirma.

@@ -50,18 +50,23 @@ afterAll(async () => {
 
 async function criarContato(
   org: string,
-  campos: { custom_fields?: Record<string, unknown>; anonimizado?: boolean } = {},
+  campos: {
+    custom_fields?: Record<string, unknown>;
+    anonimizado?: boolean;
+    mescladoEm?: string;
+  } = {},
 ): Promise<string> {
   const anonimizado = campos.anonimizado === true;
   const { rows } = await pool.query<{ id: string }>(
-    `insert into contacts (organization_id, display_name, source, custom_fields, is_anonymized, anonymized_at)
-     values ($1, 'Contato da prova', 'manual', $2::jsonb, $3, $4)
+    `insert into contacts (organization_id, display_name, source, custom_fields, is_anonymized, anonymized_at, is_merged_into)
+     values ($1, 'Contato da prova', 'manual', $2::jsonb, $3, $4, $5)
      returning id`,
     [
       org,
       JSON.stringify(campos.custom_fields ?? {}),
       anonimizado,
       anonimizado ? new Date() : null,
+      campos.mescladoEm ?? null,
     ],
   );
   return rows[0]!.id;
@@ -170,6 +175,16 @@ describe("completarLinksDoContato: o que não é do alcance fica intocado", () =
 
   it("(e) contato de OUTRA organização não é tocado, mesmo com o id certo", async () => {
     const id = await criarContato(ORG_OUTRA, { custom_fields: {} });
+
+    const gravou = await completarLinksDoContato(db, ORG, id, { site: SITE });
+
+    expect(gravou).toBe(false);
+    expect((await lerContato(id)).custom_fields).toEqual({});
+  });
+
+  it("(g) contato MESCLADO em outro da mesma organização não é tocado", async () => {
+    const destino = await criarContato(ORG, { custom_fields: {} });
+    const id = await criarContato(ORG, { custom_fields: {}, mescladoEm: destino });
 
     const gravou = await completarLinksDoContato(db, ORG, id, { site: SITE });
 

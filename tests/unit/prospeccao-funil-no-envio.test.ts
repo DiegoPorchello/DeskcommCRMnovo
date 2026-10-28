@@ -315,9 +315,9 @@ describe("criarPegadaDoCandidato", () => {
     });
   });
 
-  // Spec 26 §3.2/§3.3: contato REAPROVEITADO não passa pelo `createContactHandler`; o link
-  // que falta entra por UM update atômico, com o contato da campanha como alvo.
-  it("contato reaproveitado: não recria o contato e completa o link que falta por update atômico (spec 26)", async () => {
+  // Spec 26 §3.2/§7.1: contato REAPROVEITADO não é tocado na abordagem. Não recria o contato
+  // e não recebe update de links; ficha que já existe só se completa pelo botão.
+  it("contato reaproveitado: não recria o contato e não recebe update de links na abordagem (spec 26 §7.1)", async () => {
     const { db, chamadas } = bancoFalso();
     await criarPegadaDoCandidato(
       db,
@@ -337,13 +337,7 @@ describe("criarPegadaDoCandidato", () => {
       CONTATO,
     );
     expect(m.contato).not.toHaveBeenCalled();
-    const update = chamadas.find((c) => c.sql.includes("update public.contacts"));
-    expect(update?.params).toEqual([
-      ORG,
-      CONTATO,
-      JSON.stringify({ link_site: "https://www.clinica1.com.br/" }),
-      ["link_site"],
-    ]);
+    expect(chamadas.some((c) => c.sql.includes("update public.contacts"))).toBe(false);
   });
 });
 
