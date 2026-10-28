@@ -56,7 +56,7 @@ export interface Lead {
    */
   recurring_value_cents?: number | null;
   /** Periodicidade da recorrência — a v1 conhece `monthly` (`valor-recorrente.ts`). */
-  recurring_period?: string | null;
+  recurring_period?: "monthly" | null;
   /** Duração em meses; `null` = sem prazo (diferente de "12 meses"). */
   recurring_months?: number | null;
   currency: string | null;

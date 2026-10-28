@@ -18,7 +18,7 @@ import { formatValorDoNegocio, parseReaisToCents } from "@/lib/money";
 export function EcoDoValor<T extends FieldValues>({
   control,
   moeda,
-  campo = "valueReais",
+  campo = "valueReais" as Path<T>,
 }: {
   control: Control<T>;
   /** A moeda do NEGÓCIO; o eco em real embaixo de um campo em euro era o defeito. */

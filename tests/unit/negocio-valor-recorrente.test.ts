@@ -406,7 +406,7 @@ function lead(extra: Partial<Lead> = {}): Lead {
     created_at: "2026-10-01T12:00:00.000Z",
     updated_at: "2026-10-01T12:00:00.000Z",
     ...(extra as object),
-  } as Lead;
+  } as unknown as Lead;
 }
 
 describe("o card do funil", () => {

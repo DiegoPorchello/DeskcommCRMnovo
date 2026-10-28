@@ -36,7 +36,7 @@ export interface OrigemParaClonar {
   value_cents?: number | null;
   /** O recorrente viaja com o valor único (fatia 1 da #3602). */
   recurring_value_cents?: number | null;
-  recurring_period?: string | null;
+  recurring_period?: "monthly" | null;
   recurring_months?: number | null;
   currency?: string | null;
   owner_user_id?: string | null;

@@ -1689,7 +1689,7 @@ export async function retomarLeadHandler(
     contact_id?: string | null;
     value_cents?: number | null;
     recurring_value_cents?: number | null;
-    recurring_period?: string | null;
+    recurring_period?: "monthly" | null;
     recurring_months?: number | null;
     currency?: string | null;
     owner_user_id?: string | null;
