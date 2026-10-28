@@ -19,7 +19,11 @@ import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitte
 import { listaLegivel } from "@/lib/leads/activity-vocabulary";
 import { camposAlterados } from "@/lib/leads/campos-alterados";
 import { valoresAntesDepois } from "@/lib/leads/valores-audit";
-import { mencionaRecorrencia, recorrenciaParaGravar } from "@/lib/leads/valor-recorrente";
+import {
+  mencionaRecorrencia,
+  recorrenciaParaGravar,
+  type RecorrenciaNoPatch,
+} from "@/lib/leads/valor-recorrente";
 import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
 import {
   camposQueMudaram,
@@ -970,7 +974,21 @@ export async function updateLeadHandler(
   // um PATCH de título que carimbasse `null` nas três apagaria a mensalidade do
   // negócio em silêncio. E, tocado, vai o TRIO coerente — mandar só
   // `recurring_months` deixaria duração sem mensalidade no banco.
-  if (mencionaRecorrencia(input)) Object.assign(patch, recorrenciaParaGravar(input));
+  if (mencionaRecorrencia(input)) {
+    // A chave ausente vale o que a linha JÁ tem: o MCP e a REST mandam só o que
+    // mudou, e "a duração agora é 24" não pode apagar a mensalidade gravada.
+    const atual = existing as RecorrenciaNoPatch;
+    const valorDe = <K extends keyof RecorrenciaNoPatch>(k: K) =>
+      input[k] !== undefined ? input[k] : atual[k];
+    Object.assign(
+      patch,
+      recorrenciaParaGravar({
+        recurring_value_cents: valorDe("recurring_value_cents"),
+        recurring_period: valorDe("recurring_period"),
+        recurring_months: valorDe("recurring_months"),
+      }),
+    );
+  }
   if (input.currency !== undefined) patch.currency = input.currency;
   // Dono do negócio (0070): regra em lib/leads/owner-patch.ts, compartilhada
   // com create, bulk e MCP. owner_kind é DERIVADO — nunca lido do body.

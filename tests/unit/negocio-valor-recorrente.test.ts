@@ -378,6 +378,33 @@ describe("o handler grava o valor único e o recorrente, sem somar", () => {
     expect(patch.recurring_period).toBeNull();
     expect(patch.recurring_months).toBeNull();
   });
+
+  it("edição parcial: mandar só a duração não apaga a mensalidade gravada", async () => {
+    const db = supabaseDaEdicao({
+      ...EXISTENTE,
+      recurring_value_cents: MENSALIDADE,
+      recurring_period: "monthly",
+      recurring_months: 12,
+    });
+    await updateLeadHandler(db.cliente, ctx, LEAD, { recurring_months: 24 });
+
+    expect(db.banco.recurring_value_cents).toBe(MENSALIDADE);
+    expect(db.banco.recurring_period).toBe("monthly");
+    expect(db.banco.recurring_months).toBe(24);
+  });
+
+  it("edição parcial: mandar só a mensalidade não apaga a duração gravada", async () => {
+    const db = supabaseDaEdicao({
+      ...EXISTENTE,
+      recurring_value_cents: MENSALIDADE,
+      recurring_period: "monthly",
+      recurring_months: 12,
+    });
+    await updateLeadHandler(db.cliente, ctx, LEAD, { recurring_value_cents: 60000 });
+
+    expect(db.banco.recurring_value_cents).toBe(60000);
+    expect(db.banco.recurring_months).toBe(12);
+  });
 });
 
 /* ──────────── 4. o card e o painel lateral mostram os DOIS ──────────── */
