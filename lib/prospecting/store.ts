@@ -24,6 +24,9 @@ import {
 import { CanalReconectandoError, ProspectingError } from "./provider";
 import { audit } from "@/lib/audit";
 import { vereditoPuro } from "./site-classify";
+import { completarLinksDoContato, linksDoCandidato } from "./links-do-candidato";
+import { aplicarLinks } from "@/lib/leads/links-de-contato";
+import { logger } from "@/lib/logger";
 import { pedidoDaProspeccao } from "./pedido-da-prospeccao";
 import {
   provedorDaOrganizacao,
@@ -450,6 +453,24 @@ export async function triarCandidato(
 }
 
 /**
+ * Os `link_<tipo>` que o contato NOVO já nasce carregando (Spec 26 §3.2). Fail-open: o
+ * mapeador não deveria lançar, mas se algo escapar o contato nasce sem links e a criação
+ * segue. Devolve `undefined` quando não há link, para não mandar `custom_fields` vazio.
+ */
+function linksParaContatoNovo(p: Candidate): Record<string, unknown> | undefined {
+  try {
+    const campos = aplicarLinks({}, linksDoCandidato(p.data));
+    return Object.keys(campos).length > 0 ? campos : undefined;
+  } catch (error) {
+    logger.warn("[prospecting] mapeador de links falhou; o contato nasce sem links", {
+      candidate_id: p.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
+/**
  * A PEGADA DE UMA EMPRESA NO CRM: contato, negócio no funil e conversa.
  *
  * Era o corpo do laço de `activateCampaign`, que criava isso para TODA a fila no
@@ -501,6 +522,7 @@ export async function criarPegadaDoCandidato(
   });
   let contactId = contatoDaCampanha ?? p.contact_id;
   if (!contactId) {
+    const linksDoNovo = linksParaContatoNovo(p);
     const contact = await createContactHandler(admin, ctx, {
       name: p.data.name,
       display_name: p.data.name,
@@ -508,12 +530,25 @@ export async function criarPegadaDoCandidato(
       source: "prospecting",
       source_metadata: { campaign_id: c.id, place_id: p.data.key, maps_url: p.data.maps_url },
       consent: { legitimate_interest: { ref: config.legal_basis_ref } },
+      ...(linksDoNovo ? { custom_fields: linksDoNovo } : {}),
     });
     contactId = String(contact.contact.id);
     await db.query(
       "update prospecting_candidates set contact_id=$3 where organization_id=$1 and id=$2",
       [org, p.id, contactId],
     );
+  } else {
+    // Spec 26 §3.3: o contato que já existe (criado antes, ou reaproveitado da campanha)
+    // também recebe os links que faltam, pela mesma instrução atômica do botão "Completar
+    // fichas". Fail-open: falha aqui não derruba a abordagem.
+    try {
+      await completarLinksDoContato(db, org, contactId, linksDoCandidato(p.data));
+    } catch (error) {
+      logger.warn("[prospecting] não foi possível completar os links do contato; a abordagem segue", {
+        candidate_id: p.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   let leadId = p.lead_id;
   if (!leadId) {

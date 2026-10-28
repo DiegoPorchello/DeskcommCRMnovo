@@ -286,6 +286,65 @@ describe("criarPegadaDoCandidato", () => {
     expect(m.negocio).not.toHaveBeenCalled();
     expect(m.fronteira).toHaveBeenCalledTimes(1);
   });
+
+  // Spec 26 §3.2: o contato NOVO nasce com os links que a busca achou, nas chaves certas.
+  // O website do Instagram cai em `link_instagram` (e não em `link_site`).
+  it("contato novo nasce com os links do candidato nas chaves link_<tipo> (spec 26)", async () => {
+    const { db } = bancoFalso();
+    await criarPegadaDoCandidato(
+      db,
+      {} as never,
+      ORG,
+      campanha,
+      configOnSend,
+      candidato(1, {
+        data: {
+          name: "Clínica 1",
+          key: "place-1",
+          maps_url: "https://maps.app.goo.gl/clinica1",
+          socials: ["https://www.facebook.com/clinica1"],
+          website: "https://www.instagram.com/clinica1/",
+        },
+      }),
+      null,
+    );
+    expect(m.contato.mock.calls[0]?.[2].custom_fields).toEqual({
+      link_facebook: "https://www.facebook.com/clinica1",
+      link_instagram: "https://www.instagram.com/clinica1/",
+      link_google_meu_negocio: "https://maps.app.goo.gl/clinica1",
+    });
+  });
+
+  // Spec 26 §3.2/§3.3: contato REAPROVEITADO não passa pelo `createContactHandler`; o link
+  // que falta entra por UM update atômico, com o contato da campanha como alvo.
+  it("contato reaproveitado: não recria o contato e completa o link que falta por update atômico (spec 26)", async () => {
+    const { db, chamadas } = bancoFalso();
+    await criarPegadaDoCandidato(
+      db,
+      {} as never,
+      ORG,
+      campanha,
+      configOnSend,
+      candidato(1, {
+        data: {
+          name: "Clínica 1",
+          key: "place-1",
+          maps_url: null,
+          socials: [],
+          website: "https://www.clinica1.com.br/",
+        },
+      }),
+      CONTATO,
+    );
+    expect(m.contato).not.toHaveBeenCalled();
+    const update = chamadas.find((c) => c.sql.includes("update public.contacts"));
+    expect(update?.params).toEqual([
+      ORG,
+      CONTATO,
+      JSON.stringify({ link_site: "https://www.clinica1.com.br/" }),
+      ["link_site"],
+    ]);
+  });
 });
 
 describe("prepararCandidatoNoEnvio: a preparação na vez da empresa", () => {
