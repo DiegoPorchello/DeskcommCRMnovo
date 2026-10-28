@@ -113,3 +113,26 @@ export async function completarLinksDoContato(
   );
   return (result.rowCount ?? 0) > 0;
 }
+
+/**
+ * Só leitura: o contato receberia algum link de `links` se `completarLinksDoContato`
+ * rodasse agora? Mesmo predicado do `where` acima (mesma org, mesmos filtros, mesmas
+ * chaves), para a contagem de "faltam" dizer exatamente o que a escrita faria.
+ */
+export async function contatoPrecisaDeLinks(
+  db: pg.PoolClient,
+  org: string,
+  contactId: string,
+  links: LinksDoContato,
+): Promise<boolean> {
+  const chaves = Object.keys(aplicarLinks({}, links));
+  if (chaves.length === 0) return false;
+  const result = await db.query(
+    `select 1 from public.contacts
+      where organization_id = $1 and id = $2
+        and not is_anonymized and is_merged_into is null
+        and not (coalesce(custom_fields, '{}'::jsonb) ?& $3::text[])`,
+    [org, contactId, chaves],
+  );
+  return result.rows.length > 0;
+}

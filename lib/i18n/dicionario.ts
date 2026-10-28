@@ -17310,6 +17310,10 @@ export const DICIONARIO: Traducoes = {
   // B2 — preparo automático da prospecção (verificação do site e prévia, sozinhas).
   "Verificar agora": { es: "Verificar ahora" },
   "Verificação de sites rodou uma rodada.": { es: "La verificación de sitios corrió una ronda." },
+  // Spec 26 §3.3 — "Completar fichas": acrescenta à ficha dos contatos já existentes os links que faltam.
+  "Completar fichas": { es: "Completar fichas" },
+  "Fichas completadas:": { es: "Fichas completadas:" },
+  "Clique de novo para continuar.": { es: "Haz clic de nuevo para continuar." },
   "Não foi possível gerar a prévia.": { es: "No fue posible generar la vista previa." },
   "Escolha o agente na etapa 2 para ver a prévia.": {
     es: "Elige el agente en el paso 2 para ver la vista previa.",
