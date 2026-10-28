@@ -5028,7 +5028,12 @@ async function executarTurnoDoAgente(
           system,
           messages: [...openingMessages, ...turn.result.responseMessages, pedidoDeCorrecao],
           tools,
-          maxSteps: Math.min(maxSteps, 3),
+          // Teto FOLGADO, não arbitrário: com 3 passos a correção do teste 10
+          // (2026-10-26, job 5ca40cb3) gastou os três em ferramentas de agenda e
+          // parou antes do send_message (`messages_sent: 0`). A receita de
+          // remarcar são 4 saídas de modelo (localizar → slot → mover → enviar);
+          // 6 deixa folga sem deixar de ser limite (correção continua UMA).
+          maxSteps: Math.min(maxSteps, 6),
           ...(agentConfig !== null
             ? {
                 model: agentConfig.model,

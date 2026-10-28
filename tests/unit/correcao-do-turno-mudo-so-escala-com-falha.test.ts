@@ -85,7 +85,15 @@ describe("recuperação limitada do turno mudo (preservada)", () => {
   it("a correção continua UMA só — um único runModelCall, steps limitados", () => {
     const bloco = blocoCorrecao();
     expect(bloco.split("await runModelCall(").length - 1).toBe(1);
-    expect(bloco).toContain("Math.min(maxSteps, 3)");
+    // O teto é 6, e não 3: medido no teste 10 do aceite (2026-10-26, job
+    // 5ca40cb3) a correção com 3 passos gastou OS TRÊS em ferramentas de agenda
+    // (crm_list_event_types → crm_find_free_slots → crm_find_and_book_appointment)
+    // e parou antes de chegar ao send_message — `messages_sent: 0`, cliente sem
+    // resposta. Uma remarcação correta são 4 saídas de modelo (localizar com
+    // crm_list_appointments → slot → crm_reschedule_appointment → send_message);
+    // com teto 3 ela é aritmeticamente impossível. O limite CONTINUA existindo
+    // (correção é UMA e limitada) — só é folgado o bastante para a receita caber.
+    expect(bloco).toContain("Math.min(maxSteps, 6)");
     // O pedido de correção é a instrução canônica do motor.
     expect(bloco).toContain("CORRECAO_DO_TURNO_MUDO");
     // Nenhum desfecho terminal dentro da correção — decisão é separada.

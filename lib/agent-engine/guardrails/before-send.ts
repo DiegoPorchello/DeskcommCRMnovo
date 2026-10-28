@@ -679,6 +679,33 @@ const AGENDA_CONFIRMED_PATTERN =
   /\b(agendamento|hor[aá]rio|encaixe|vaga|visita)\b[^.!?\n]{0,30}\b(esta|está|ficou|fica|segue)\b[^.!?\n]{0,20}\b(confirmad[oa]|agendad[oa]|marcad[oa]|certinh[oa])\b/i;
 
 /**
+ * A MESMA afirmação consumada com o particípio ABRENDO a frase — a ordem invertida do
+ * `AGENDA_CONFIRMED_PATTERN` acima ("Confirmado: manicure dia 29/10 às 9h", "Confirmado,
+ * a 9h está livre pra manicure na quinta, dia 29/10"). Medido no rig de aceite 2026-10-25:
+ * o teste 10 do salão ("Quero remarcar o que marquei ontem") falhou SEIS vezes seguidas
+ * (v10..v15 do prompt) e, em TODAS, o turno final mandou exatamente esta forma — "Confirmado:
+ * [serviço] dia [data] às [hora]" — com a agenda parada no dia antigo. O padrão acima não
+ * casava porque exige o substantivo de agenda ANTES de "está/ficou" ANTES do particípio;
+ * aqui o particípio vem primeiro e o "substantivo" é a própria data/hora.
+ *
+ * O corte é o mesmo do resto do gate: ancorado nas frases medidas, e exige os DOIS
+ * marcadores na mesma frase — dia (data numérica ou dia da semana) E hora. Um só não basta:
+ * "Confirmado! Te chamo amanhã" é compromisso de mensagem e "Confirmado: te ligo às 14h"
+ * é retorno — nenhum dos dois afirma horário de agenda consumado (bordas presas no
+ * `gate-agenda-stall.test.ts`). Roda sobre o texto JÁ sem acento (`semAcento`); as variantes
+ * acentuadas seguem por segurança, como no padrão irmão.
+ */
+const AGENDA_CONFIRMADO_INVERTIDO_PATTERN = new RegExp(
+  String.raw`\b(confirmad[oa]|agendad[oa]|marcad[oa]|certinh[oa])\b` +
+    // dia na mesma frase (data numérica OU dia da semana) — lookahead, porque a ordem
+    // entre dia e hora varia ("dia 29/10 às 9h" vs "a 9h ... na quinta, dia 29/10").
+    String.raw`(?=[^.!?\n]{0,80}\b(?:segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|amanh[ãa]|hoje|dia\s+\d{1,2}\s*[/\-]\s*\d{1,2})\b)` +
+    // e a hora, dentro da mesma janela de 80 chars da frase.
+    String.raw`[^.!?\n]{0,80}?\b\d{1,2}(?::\d{2}|h\b)`,
+  'i',
+);
+
+/**
  * `\b` do JS é ASCII-only ("word char" = `[A-Za-z0-9_]`): `á` não conta como letra
  * pra ele. Isso faz `\best[aá]\b` NUNCA casar "está" (acentuado) seguido de espaço —
  * o `á` fica "sem fronteira" com o espaço seguinte (nem um nem outro é \w) e o `\b`
@@ -731,7 +758,9 @@ export const agendaStallGate: Gate = {
     const bodySemAcento = semAcento(ctx.body);
     const stall =
       AGENDA_STALL_PATTERN.test(bodySemAcento) || AGENDA_STALL_VER_PATTERN.test(bodySemAcento);
-    const confirmedSemChecar = AGENDA_CONFIRMED_PATTERN.test(bodySemAcento);
+    const confirmedSemChecar =
+      AGENDA_CONFIRMED_PATTERN.test(bodySemAcento) ||
+      AGENDA_CONFIRMADO_INVERTIDO_PATTERN.test(bodySemAcento);
     if (!stall && !confirmedSemChecar) return { pass: true };
     return {
       pass: false,
