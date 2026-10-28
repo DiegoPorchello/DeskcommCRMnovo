@@ -1,3 +1,4 @@
+import type { AnexosDoCampoNoCard } from "@/lib/kanban/anexos-no-card";
 import type { ScoreBand } from "@/lib/kanban/score-band";
 import type { ResumoDasTarefas } from "@/lib/tarefas/tipos";
 
@@ -144,6 +145,17 @@ export interface Lead {
    * `lib/kanban/tarefas-no-quadro.ts`.
    */
   tarefas?: ResumoDasTarefas;
+  /**
+   * Derivado (não é coluna): o que os campos `file` do funil TÊM neste negócio
+   * — o bloco que o card desenha sem abrir o dossiê (#2829, fatia 1).
+   *
+   * Um item por campo DECLARADO no funil, inclusive os vazios (`total: 0`): o
+   * operador criou o campo e precisa ver que falta documento. Ausente por
+   * inteiro quando o funil não declara nenhum campo `file` — o payload do quadro
+   * não engorda para quem não usa o recurso. Ver
+   * `lib/kanban/anexos-no-card.ts`.
+   */
+  anexos?: AnexosDoCampoNoCard[];
   created_at: string;
   updated_at: string;
   created_by_user_id: string | null;

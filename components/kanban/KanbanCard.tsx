@@ -14,6 +14,7 @@ import { ConversaSlot } from "./ConversaSlot";
 import { ScoreSlot } from "./ScoreSlot";
 import { OwnerBadge } from "./OwnerBadge";
 import { ContatoNoCard } from "./ContatoNoCard";
+import { ArquivosNoCard } from "./ArquivosNoCard";
 import { TarefasNoCard } from "./TarefasNoCard";
 
 /** Os dois gestos de seleção que o card sabe relatar. */
@@ -310,6 +311,12 @@ export function KanbanCard({
           {/* Telefone, e-mail e links do contato — some por inteiro quando o
               negócio não tem nada disso, como a conversa acima. */}
           <ContatoNoCard lead={lead} />
+
+          {/* Os campos `file` do funil (#2829): contagem + o documento clicável.
+              Fica junto do contato, entre o conteúdo do negócio e o rodapé de
+              dono/tempo. Some por inteiro quando o funil não declara campo de
+              arquivo — quem não usa o recurso não vê card diferente. */}
+          <ArquivosNoCard lead={lead} />
 
           {/* ④ dono (+ selo de tarefas) · ⑤ tempo no estágio */}
           <div className="mt-1 flex h-6 items-center justify-between gap-2">
