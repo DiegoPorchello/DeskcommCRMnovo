@@ -50,11 +50,18 @@ export async function POST(req: NextRequest): Promise<Response> {
     throw err;
   }
 
-  const resultado = await dispensarParDeContatos(getRequestPool(), {
-    organizationId: org.orgId,
-    contactIds: input.contact_ids as [string, string],
-    userId: user.id,
-  });
+  // Sem banco direto (`SUPABASE_DB_URL` ausente) ou com erro na transação, a
+  // resposta segue o envelope `{error}` com `requestId` — nunca o 500 cru do Next.
+  let resultado: Awaited<ReturnType<typeof dispensarParDeContatos>>;
+  try {
+    resultado = await dispensarParDeContatos(getRequestPool(), {
+      organizationId: org.orgId,
+      contactIds: input.contact_ids as [string, string],
+      userId: user.id,
+    });
+  } catch {
+    return fail("internal_error", "Não foi possível dispensar a sugestão agora.", 500, { requestId });
+  }
 
   if (!resultado.ok) {
     if (resultado.motivo === "nao_encontrado") {

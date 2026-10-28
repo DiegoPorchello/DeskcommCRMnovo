@@ -195,3 +195,20 @@ describe("nome parecido: nome igual", () => {
     expect(longos).toHaveLength(1);
   });
 });
+
+describe("nome parecido: só o critério do nome contido", () => {
+  it("12. 'Guarnieri' dentro de 'Comercial Guarnieri' forma par mesmo com 'comercial' comum", () => {
+    // Só UMA palavra rara em comum ('guarnieri'): o critério (a) não pega o par, e
+    // 'comercial' aparece em 6 fichas. Sabotagem: tirar o critério (b) — ou a borda
+    // de espaço que o delimita — deixa este caso vermelho.
+    const pares = encontrarParecidosPorNome([
+      contato("a", { name: "Guarnieri" }),
+      contato("b", { name: "Comercial Guarnieri" }),
+      contato("c", { name: "Comercial Alfa" }),
+      contato("d", { name: "Comercial Beta" }),
+      contato("e", { name: "Comercial Gama" }),
+      contato("f", { name: "Comercial Delta" }),
+    ]);
+    expect(pares.map((p) => p.contatos.map((c) => c.id).sort())).toEqual([["a", "b"]]);
+  });
+});
