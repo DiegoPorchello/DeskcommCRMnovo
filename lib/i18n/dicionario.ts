@@ -9389,12 +9389,6 @@ export const DICIONARIO: Traducoes = {
   "Não foi possível buscar agora.": { es: "No se pudo buscar ahora." },
   // Rótulos dos tipos de link da ficha (lib/leads/links-de-contato.ts), lidos
   // por t(rotulo) numa variável: sem entrada aqui, o espanhol sairia em português.
-  Instagram: { es: "Instagram" },
-  Link: { es: "Enlace" },
-  Facebook: { es: "Facebook" },
-  LinkedIn: { es: "LinkedIn" },
-  TikTok: { es: "TikTok" },
-  YouTube: { es: "YouTube" },
 
   // ─── app/api/v1/contacts/merge/route.ts (DESFECHOS que chegam à tela via showApiError) ───
   "Seleção inválida: escolha um contato principal e ao menos um a ser absorvido.": {

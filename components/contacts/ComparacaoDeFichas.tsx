@@ -39,17 +39,48 @@ interface Linha {
   celulas: [Item[], Item[]];
 }
 
-/** Os rótulos de `source` que a tela de contatos já conhece (o filtro de origem). */
-const ROTULO_DA_ORIGEM: Record<string, string> = {
-  manual: "Manual",
-  whatsapp: "WhatsApp",
-  site: "Site (landing page)",
-  nuvemshop: "Nuvemshop",
-  import_csv: "Importado (CSV)",
-  [ORIGEM_AGENDA_DO_CELULAR]: "Agenda do celular",
-  meta_ads: "Anúncio da Meta",
-  google_ads: "Anúncio do Google",
-};
+/**
+ * Os rótulos de `source` que a tela de contatos já conhece (o filtro de origem).
+ * Cada ramo chama `t()` com o LITERAL: chave em variável não é achada pelo guarda
+ * de espanhol e sairia em português (`i18n-espanhol-cobre-a-tela`).
+ */
+function rotuloDaOrigem(source: string, t: (texto: string) => string): string {
+  switch (source) {
+    case "manual":
+      return t("Manual");
+    case "whatsapp":
+      return "WhatsApp";
+    case "site":
+      return t("Site (landing page)");
+    case "nuvemshop":
+      return "Nuvemshop";
+    case "import_csv":
+      return t("Importado (CSV)");
+    case ORIGEM_AGENDA_DO_CELULAR:
+      return t("Agenda do celular");
+    case "meta_ads":
+      return t("Anúncio da Meta");
+    case "google_ads":
+      return t("Anúncio do Google");
+    default:
+      return source;
+  }
+}
+
+/** Rótulo do tipo de link, com o literal em cada ramo (mesma razão de `rotuloDaOrigem`). */
+function rotuloDoLink(tipo: string, t: (texto: string) => string): string {
+  switch (tipo) {
+    case "site":
+      return t("Site");
+    case "google_meu_negocio":
+      return t("Google Meu Negócio");
+    case "outro":
+      return t("Outro");
+    default:
+      // Instagram, Facebook, LinkedIn, TikTok, YouTube: nome de marca, igual em todo idioma.
+      return TIPOS_DE_LINK.find((x) => x.id === tipo)?.rotulo ?? tipo;
+  }
+}
 
 /** Sem repetir: a prospecção guarda o mesmo e-mail/telefone mais de uma vez. */
 function unicos(valores: (string | null | undefined)[]): string[] {
@@ -77,7 +108,6 @@ function linhasDaComparacao(
     ]);
     const email = unicos([f.email, ...f.prospeccao.emails]);
     const maps = unicos([f.maps_url, ...f.prospeccao.maps]);
-    const origem = ROTULO_DA_ORIGEM[f.source];
     return {
       agenda: f.address_book_name ? [{ texto: f.address_book_name }] : [],
       telefone: telefone.map((texto) => ({ texto })),
@@ -87,13 +117,12 @@ function linhasDaComparacao(
       site: comLink(unicos(f.prospeccao.sites)),
       redes: comLink(unicos(f.prospeccao.redes)),
       maps: maps.map((texto) => ({ texto, href: normalizarLink(texto) })),
-      origem: f.source ? [{ texto: origem ? t(origem) : f.source }] : [],
+      origem: f.source ? [{ texto: rotuloDaOrigem(f.source, t) }] : [],
       criada: [{ texto: format(new Date(f.created_at), "dd/MM/yyyy", { locale: localeDaData }) }],
       conversas: [{ texto: String(f.conversas) }],
       negocios: [{ texto: String(f.negocios) }],
       links: f.links.map((l) => {
-        const rotulo = TIPOS_DE_LINK.find((x) => x.id === l.tipo)?.rotulo ?? l.tipo;
-        return { texto: `${t(rotulo)}: ${l.href}`, href: l.href };
+        return { texto: `${rotuloDoLink(l.tipo, t)}: ${l.href}`, href: l.href };
       }),
     };
   };

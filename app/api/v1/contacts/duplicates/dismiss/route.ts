@@ -84,12 +84,13 @@ export async function POST(req: NextRequest): Promise<Response> {
   // mudou nada, e uma linha de trilha por clique repetido seria ruído. Metadado só
   // com os ids — nunca nome nem telefone.
   if (resultado.criada) {
+    const [primeiroId] = resultado.candidatos;
     await audit({
       action: "contact.duplicate_dismissed",
       actorUserId: user.id,
       organizationId: org.orgId,
       resourceType: "contact",
-      resourceId: resultado.candidatos[0],
+      resourceId: primeiroId,
       requestId,
       metadata: { candidates: resultado.candidatos },
     });

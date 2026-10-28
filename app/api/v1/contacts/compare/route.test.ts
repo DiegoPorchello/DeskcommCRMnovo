@@ -29,6 +29,7 @@ type Linha = Record<string, unknown>;
 function ficha(id: string, parcial: Linha = {}): Linha {
   return {
     id,
+    organization_id: ORG_ID,
     name: `Ficha ${id.slice(0, 2)}`,
     display_name: null,
     address_book_name: null,

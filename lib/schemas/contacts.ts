@@ -343,7 +343,7 @@ export const contactsDismissDuplicateSchema = z
   .object({
     contact_ids: z.array(z.string().uuid()).length(2),
   })
-  .refine((v) => v.contact_ids[0]!.toLowerCase() !== v.contact_ids[1]!.toLowerCase(), {
+  .refine((v) => v.contact_ids[0]?.toLowerCase() !== v.contact_ids[1]?.toLowerCase(), {
     message: "Os dois contatos precisam ser diferentes.",
     path: ["contact_ids"],
   });

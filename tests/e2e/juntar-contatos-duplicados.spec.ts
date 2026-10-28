@@ -237,7 +237,7 @@ async function limparFixtures(): Promise<void> {
   // Dispensas gravadas pelo teste "Não são a mesma empresa" apontam para os ids
   // desta fixture. Sem apagá-las, a próxima rodada veria um par "já dispensado"
   // com ids que não existem mais.
-  await admin.from("merge_queue").delete().overlaps("candidates", ids);
+  await admin.from("merge_queue").delete().eq("organization_id", creds.org_id).overlaps("candidates", ids);
 
   const { data: conversas } = await admin.from("conversations").select("id").in("contact_id", ids);
   const idsConversa = ((conversas ?? []) as { id: string }[]).map((c) => c.id);
@@ -524,6 +524,7 @@ test.describe("Contatos duplicados — juntar pela tela", () => {
     const { data: filas } = await admin
       .from("merge_queue")
       .select("status, reason")
+      .eq("organization_id", creds.org_id)
       .overlaps("candidates", [idSorrisoA, idSorrisoB]);
     expect(filas ?? []).toHaveLength(1);
     expect((filas ?? [])[0]).toMatchObject({ status: "discarded", reason: "nao_sao_a_mesma" });
@@ -541,7 +542,11 @@ test.describe("Contatos duplicados — juntar pela tela", () => {
     await captura(page, "07-parecido-dispensado");
 
     // Limpa a dispensa: o teste de juntar precisa do par de volta.
-    await admin.from("merge_queue").delete().overlaps("candidates", [idSorrisoA, idSorrisoB]);
+    await admin
+      .from("merge_queue")
+      .delete()
+      .eq("organization_id", creds.org_id)
+      .overlaps("candidates", [idSorrisoA, idSorrisoB]);
   });
 
   test("juntar com outra ficha: o par parecido se junta pela ficha, e as duas conversas ficam com quem ficou", async ({

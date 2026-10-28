@@ -37,7 +37,9 @@ const COLUNAS_DA_FICHA =
 const idsDaComparacao = z
   .array(z.string().uuid())
   .length(2)
-  .refine((ids) => ids[0]!.toLowerCase() !== ids[1]!.toLowerCase(), {
+  // O `refine` roda mesmo quando o `length(2)` já falhou (problema não fatal no Zod):
+  // com um id só, `ids[1]` é `undefined` — por isso o `?.`.
+  .refine((ids) => ids[0]?.toLowerCase() !== ids[1]?.toLowerCase(), {
     message: "As duas fichas precisam ser diferentes.",
   });
 
