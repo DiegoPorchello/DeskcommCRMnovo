@@ -1,3 +1,8 @@
+// @vitest-environment node
+//
+// Multipart real (File/FormData) precisa do realm do Node: o jsdom (default do projeto)
+// tem File/FormData próprios que o NextRequest não sabe ler — mesmo achado de
+// `app/api/v1/products/import/route.test.ts`.
 /**
  * Importar planilha de prospecção: só sessão de administrador, organização vinda da
  * autenticação (nunca do formulário), 422 com motivo para arquivo/campo ruim, audit sem o
