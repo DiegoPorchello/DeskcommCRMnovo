@@ -44,6 +44,14 @@ export async function POST(req: NextRequest) {
     return fail("forbidden", "Importar planilha exige a tela.", 403, { requestId, headers });
   const org = auth.organizationId;
 
+  // `formData()` lê o corpo inteiro para a memória: o tamanho declarado é conferido antes.
+  // A folga cobre o envelope multipart e os campos de texto além do arquivo.
+  const declarado = Number(req.headers.get("content-length") ?? "0");
+  if (declarado > IMPORT_MAX_BYTES + 64 * 1024)
+    return fail("validation_failed", "Arquivo grande demais (máximo de 2 MB).", 422, {
+      requestId,
+      headers,
+    });
   let form: FormData;
   try {
     form = await req.formData();
@@ -64,7 +72,7 @@ export async function POST(req: NextRequest) {
       requestId,
       headers,
     });
-  // Antes de ler o corpo inteiro para a memória.
+  // O `content-length` pode faltar (envio em partes): o arquivo é conferido de novo aqui.
   if (file.size > IMPORT_MAX_BYTES)
     return fail("validation_failed", "Arquivo grande demais (máximo de 2 MB).", 422, {
       requestId,

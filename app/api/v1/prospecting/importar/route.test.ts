@@ -154,6 +154,15 @@ describe("POST /api/v1/prospecting/importar", () => {
     expect(deps.importar).not.toHaveBeenCalled();
   });
 
+  it("corpo declarado grande demais: 422 sem ler o formulário", async () => {
+    const req = post(formulario({}), { "content-length": String(3 * 1024 * 1024) });
+    const lerFormulario = vi.spyOn(req, "formData");
+    const res = await POST(req);
+    expect(res.status).toBe(422);
+    expect(lerFormulario).not.toHaveBeenCalled();
+    expect(deps.importar).not.toHaveBeenCalled();
+  });
+
   it("campo obrigatório ausente ou inválido: 422", async () => {
     for (const form of [
       formulario({ omitir: ["origem_da_lista"] }),

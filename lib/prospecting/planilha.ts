@@ -47,6 +47,18 @@ function campoDaColuna(cabecalho: string): Campo | null {
   return null;
 }
 
+/**
+ * O site como a pessoa digita na planilha: quase sempre sem protocolo ("www.padaria.com.br").
+ * Sem protocolo ganha `https://`; o que não vira URL `http(s)` (um `javascript:`, um texto
+ * solto) fica nulo em vez de ser gravado — o mesmo `safePublicLink` que guarda as redes.
+ */
+function siteDaCelula(bruto: string): string | null {
+  if (!bruto) return null;
+  const comProtocolo = /^[a-z][a-z0-9+.-]*:/i.test(bruto) ? bruto : `https://${bruto}`;
+  const url = safePublicLink(comProtocolo);
+  return url && url.length <= 500 ? url : null;
+}
+
 export interface ErroDaLinhaDeProspeccao {
   /** A linha como a pessoa a vê na planilha: 1 é o cabeçalho. */
   linha: number;
@@ -137,7 +149,7 @@ export function lerPlanilhaDeProspeccao(sheet: SheetMatrix): LeituraDaPlanilhaDe
       key: `planilha:${phone}`,
       name,
       phone,
-      website: primeiro(bruto, "website").slice(0, 500) || null,
+      website: siteDaCelula(primeiro(bruto, "website")),
       category: primeiro(bruto, "category").slice(0, 500) || null,
       address: valores(bruto, "address").join(", ").slice(0, 500) || null,
       maps_url: null,

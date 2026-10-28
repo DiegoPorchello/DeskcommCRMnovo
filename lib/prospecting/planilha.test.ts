@@ -130,6 +130,22 @@ describe("lerPlanilhaDeProspeccao", () => {
     ]);
   });
 
+  it("site: só http(s); domínio sem protocolo ganha https://; javascript: vira nulo", () => {
+    const r = ok({
+      headers: ["empresa", "telefone", "site"],
+      rows: [
+        ["Loja A", "(11) 99999-0001", "www.loja-a.com.br"],
+        ["Loja B", "(11) 99999-0002", "javascript:alert(1)"],
+        ["Loja C", "(11) 99999-0003", "http://loja-c.com.br/"],
+      ],
+    });
+    expect(r.candidatos.map((c) => c.website)).toEqual([
+      "https://www.loja-a.com.br/",
+      null,
+      "http://loja-c.com.br/",
+    ]);
+  });
+
   it("emails: até 5, separados por vírgula, ponto e vírgula ou espaço", () => {
     const r = ok({
       headers: ["empresa", "telefone", "email"],
