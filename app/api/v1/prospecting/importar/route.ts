@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
-import { resolveAuthDual } from "@/lib/api/auth-dual";
+import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
@@ -40,6 +40,10 @@ export async function POST(req: NextRequest) {
     scope: "mcp:write",
   });
   if (!auth.ok) return auth.response;
+  // A cerca da casa (`rotas-bearer-aplicam-teto-de-escrita`) exige o teto em toda rota com
+  // `resolveAuthDual`; aqui o token é recusado logo abaixo, mas o teto vem antes, como nas irmãs.
+  const teto = await tetoDeEscritaDoToken(auth, "prospecting", requestId);
+  if (teto) return teto;
   if (auth.via === "token")
     return fail("forbidden", "Importar planilha exige a tela.", 403, { requestId, headers });
   const org = auth.organizationId;

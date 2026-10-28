@@ -19,6 +19,7 @@ import {
   type CampaignConfig,
   type CampaignPace,
   type SearchInput,
+  type BuscaDaPlanilha,
   type Prospect,
 } from "./schema";
 import { CanalReconectandoError, ProspectingError } from "./provider";

@@ -277,7 +277,7 @@ export function ProspectingClient() {
   const [avaliarSite, setAvaliarSite] = useState(true);
   const [gerarPrevia, setGerarPrevia] = useState(true);
   // Segunda porta de entrada: a lista própria do operador (planilha .csv/.xlsx).
-  const [aba, setAba] = useState<"maps" | "planilha">("maps");
+  const [aba, setAba] = useState<"maps" | "csv">("maps");
   const importAttempt = useRef<{ fingerprint: string; id: string } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [arquivoKey, setArquivoKey] = useState(0);
@@ -411,7 +411,7 @@ export function ProspectingClient() {
   function baixarModelo() {
     const modelo =
       "\uFEFFempresa;telefone;site;segmento;cidade;email;instagram\r\n" +
-      "Padaria Exemplo;(11) 90000-0000;https://exemplo.com.br;padaria;São Paulo;contato@exemplo.com.br;https://instagram.com/exemplo\r\n";
+      "Padaria Exemplo;(11) 90000-0000;https://www.example.com;padaria;São Paulo;contato@example.com;https://instagram.com/exemplo\r\n";
     const url = URL.createObjectURL(new Blob([modelo], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
@@ -784,7 +784,7 @@ export function ProspectingClient() {
               {(
                 [
                   ["maps", t("Buscar no Google Maps")],
-                  ["planilha", t("Usar minha planilha")],
+                  ["csv", t("Usar minha planilha")],
                 ] as const
               ).map(([id, rotulo]) => (
                 <button
@@ -927,11 +927,11 @@ export function ProspectingClient() {
                 {busy ? t("Aguarde…") : t("Buscar empresas")}
               </Button>
             </form>
+            {aba === "csv" && (
             <form
-              hidden={aba !== "planilha"}
-              id="prospecting-painel-planilha"
+              id="prospecting-painel-csv"
               role="tabpanel"
-              aria-labelledby="prospecting-aba-planilha"
+              aria-labelledby="prospecting-aba-csv"
               className="mt-4 space-y-4"
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -1038,6 +1038,7 @@ export function ProspectingClient() {
                 </div>
               )}
             </form>
+            )}
           </Card>
           <section>
             <h2 className="mb-3 text-sm font-semibold">{t("Suas campanhas")}</h2>

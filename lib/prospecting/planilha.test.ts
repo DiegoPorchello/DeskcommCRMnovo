@@ -21,7 +21,7 @@ describe("lerPlanilhaDeProspeccao", () => {
       key: "planilha:+5511999990000",
       name: "Padaria Exemplo",
       phone: "+5511999990000",
-      website: "https://exemplo.com.br",
+      website: "https://exemplo.com.br/",
       category: "padaria",
       address: "São Paulo",
       maps_url: null,
@@ -38,7 +38,7 @@ describe("lerPlanilhaDeProspeccao", () => {
     expect(r.candidatos[0]).toMatchObject({
       name: "Panadería Sol",
       phone: "+351912345678",
-      website: "https://sol.pt",
+      website: "https://sol.pt/",
       address: "Lisboa",
     });
   });
