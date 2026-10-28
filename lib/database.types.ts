@@ -13168,6 +13168,7 @@ export type Database = {
           dispatched_at: string;
           disputa_de_banco: boolean | null;
           finished_at: string | null;
+          force_requested: boolean;
           from_version: string;
           id: string;
           last_step: string | null;
@@ -13183,6 +13184,7 @@ export type Database = {
           dispatched_at?: string;
           disputa_de_banco?: boolean | null;
           finished_at?: string | null;
+          force_requested?: boolean;
           from_version?: string;
           id?: string;
           last_step?: string | null;
@@ -13197,6 +13199,7 @@ export type Database = {
           dispatched_at?: string;
           disputa_de_banco?: boolean | null;
           finished_at?: string | null;
+          force_requested?: boolean;
           from_version?: string;
           id?: string;
           last_step?: string | null;
@@ -13220,6 +13223,7 @@ export type Database = {
           id: number;
           latest_version: string;
           off_release: boolean;
+          runtime_confirmation: Json | null;
           update_requested_at: string | null;
           update_requested_by: string | null;
           updated_at: string;
@@ -13235,6 +13239,7 @@ export type Database = {
           id?: number;
           latest_version?: string;
           off_release?: boolean;
+          runtime_confirmation?: Json | null;
           update_requested_at?: string | null;
           update_requested_by?: string | null;
           updated_at?: string;
@@ -13249,6 +13254,7 @@ export type Database = {
           id?: number;
           latest_version?: string;
           off_release?: boolean;
+          runtime_confirmation?: Json | null;
           update_requested_at?: string | null;
           update_requested_by?: string | null;
           updated_at?: string;

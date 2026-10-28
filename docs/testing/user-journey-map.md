@@ -3980,6 +3980,21 @@ estado. O runner foi corrigido e as tentativas/capturas antigas foram conservada
 com esses limites. O manager original não foi promovido, os guards do produto
 não foram alterados e os recursos exclusivos foram removidos ao fim.
 
+
+## Preferências e textos da operação — resgate #3402/#3405/#3458
+
+Estado: a primeira execução real do CI encontrou quatro falhas nas jornadas
+novas. As fixtures e o loader foram corrigidos; a nova execução ainda está
+pendente. Testes dirigidos e coleção do Playwright não são prova de UX. Contratos, consumidores
+compartilhados, transporte sintético e limites em
+[antigos-core-3402-3405-3458.md](antigos-core-3402-3405-3458.md).
+
+| Origem | Jornada preparada | Evidência a recolher |
+| --- | --- | --- |
+| #3402 | Número e Não lidos por organização, recarga, A/B/A, removido e armazenamento bloqueado | `inbox-busca-e-filtros-dizem-a-verdade.spec.ts`; PNG em `evidence/antigos-core-3402/` |
+| #3405 | Resposta rápida criada pela tela e texto recebido por HTTP; campanha prepara reserva e nome no snapshot real | `qa-l12-inbox.spec.ts` e `campanha-com-modelo-aprovado.spec.ts`; PNG em `evidence/antigos-core-3405/` |
+| #3458 | Par handler/ferramenta com resposta LLM sintética, SQL real e o card após genérica, concreta, preservação e null | `qa-l12-funil.spec.ts`; PNG em `evidence/antigos-core-3458/` |
+
 ## Lote de correções de acesso, documento e atendimento (2026-10-26)
 
 **Preparado; NÃO EXECUTADO neste lote no navegador nem em Postgres local.**

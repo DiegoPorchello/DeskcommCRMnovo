@@ -7540,6 +7540,13 @@ export const DICIONARIO: Traducoes = {
   "O sistema sai do ar por cerca de 2 minutos e volta sozinho. Faço uma cópia de segurança dos seus dados antes.": {
     es: "El sistema queda fuera de servicio unos 2 minutos y vuelve solo. Antes hago una copia de seguridad de tus datos.",
   },
+  // O atalho do estado de falha (#2756): o MESMO `--force` que a tela mostra
+  // logo embaixo, em `<Comando>`.
+  "Forçar atualização": { es: "Forzar actualización" },
+  "Forçando…": { es: "Forzando…" },
+  "Rodo o comando de baixo por você, sem precisar abrir o terminal. Faço uma cópia de segurança dos seus dados antes.": {
+    es: "Ejecuto el comando de abajo por ti, sin necesidad de abrir una terminal. Antes hago una copia de seguridad de tus datos.",
+  },
   // O um-clique de voltar (#2757) — o "2 minutos" não é promessa de tempo de
   // execução, é o mesmo aviso do botão de atualizar, agora com o destino dito.
   "Voltar para a versão anterior": { es: "Volver a la versión anterior" },
@@ -9476,6 +9483,17 @@ export const DICIONARIO: Traducoes = {
     es: "No hay contactos con ese nombre o teléfono.",
   },
   "Contato criado": { es: "Contacto creado" },
+  // #3483 — o cadastro que já abre a conversa. As duas frases novas são do
+  // caminho de salvar-e-abrir: uma quando o contato salvo não tem telefone
+  // (não há thread 1:1 para abrir) e outra no funil, onde o negócio pode
+  // nascer sem pessoa nenhuma.
+  "Salvar e iniciar conversa": { es: "Guardar e iniciar conversa" },
+  "Contato salvo. Cadastre um telefone para abrir a conversa.": {
+    es: "Contacto guardado. Registra un teléfono para abrir la conversación.",
+  },
+  "Escolha um contato para abrir a conversa.": {
+    es: "Elige un contacto para abrir la conversación.",
+  },
   "Não foi possível carregar as sugestões agora.": { es: "No se pudieron cargar las sugerencias en este momento." },
   "Não foi possível registrar a decisão.": { es: "No se pudo registrar la decisión." },
   "O assistente ouviu isto na conversa": { es: "El asistente escuchó esto en la conversación" },
@@ -18096,6 +18114,30 @@ export const DICIONARIO: Traducoes = {
   "Já existe um setor com este nome.": { es: "Ya existe un sector con este nombre." },
   "Setor não encontrado.": { es: "Sector no encontrado." },
   "Só gerentes e administradores definem o horário de atendimento.": { es: "Solo gerentes y administradores definen el horario de atención." },
+  'Para não depender do dado, ponha um texto de reserva: {{primeiro_nome|"aluno"}}.': {
+    es: 'Para no depender del dato, pon un texto de respaldo: {{primeiro_nome|"alumno"}}.',
+  },
+  // Installed runtime identity, distinct from an available release.
+  "Versão ainda não confirmada": { es: "Versión aún no confirmada" },
+  "Execução não confirmada": { es: "Ejecución no confirmada" },
+  "Versão instalada": { es: "Versión instalada" },
+  "Ainda não confirmada": { es: "Aún no confirmada" },
+  "Última confirmação": { es: "Última confirmación" },
+  "Instalação personalizada": { es: "Instalación personalizada" },
+  "Esta instalação preserva alterações próprias sobre a base oficial.": { es: "Esta instalación conserva cambios propios sobre la base oficial." },
+  "Concilie as alterações antes de trocar as imagens. A versão publicada não substitui automaticamente esta instalação.": { es: "Concilie los cambios antes de cambiar las imágenes. La versión publicada no sustituye automáticamente esta instalación." },
+  "A execução dos serviços ainda não foi confirmada. Aguarde a próxima verificação do servidor.": { es: "La ejecución de los servicios aún no se ha confirmado. Espere la próxima verificación del servidor." },
+  "Esta instalação é personalizada. Concilie as alterações antes de trocar as imagens.": { es: "Esta instalación está personalizada. Concilie los cambios antes de cambiar las imágenes." },
+  "Não há atualização posterior confirmada para esta instalação.": { es: "No hay una actualización posterior confirmada para esta instalación." },
+  "A última tentativa falhou. O estado instalado aparece na confirmação dos serviços acima.": { es: "El último intento falló. El estado instalado aparece en la confirmación de los servicios de arriba." },
+  "Confira a execução e preserve as alterações próprias antes de trocar as imagens.": { es: "Compruebe la ejecución y conserve los cambios propios antes de cambiar las imágenes." },
+  "Os serviços executam revisões diferentes": { es: "Los servicios ejecutan revisiones diferentes" },
+  "A confirmação do servidor venceu": { es: "La confirmación del servidor ha caducado" },
+  "Não confirmado": { es: "No confirmado" },
+  "Última release oficial": { es: "Última versión oficial publicada" },
+  "O agente do servidor ainda não confirmou suporte para refazer a atualização pela tela.": {
+    es: "El agente del servidor aún no ha confirmado soporte para repetir la actualización desde esta pantalla.",
+  },
 };
 
 /**
