@@ -18133,6 +18133,9 @@ export const DICIONARIO: Traducoes = {
   "Só tel:, http:// e https:// são aceitos.": { es: "Solo se aceptan tel:, http:// y https://." },
   "Falta o que vem depois do esquema.": { es: "Falta lo que va después del esquema." },
   "Depois do esquema, escreva // e o endereço.": { es: "Después del esquema, escribe // y la dirección." },
+  "O domínio tem de ser fixo: use marcadores só depois da primeira /.": {
+    es: "El dominio tiene que ser fijo: usa marcadores solo después de la primera /.",
+  },
   "O limite é de seis atalhos por funil.": { es: "El límite es de seis accesos por embudo." },
   "Dê um nome a cada atalho do card antes de salvar.": {
     es: "Ponle un nombre a cada acceso de la tarjeta antes de guardar.",

@@ -98,6 +98,31 @@ describe("allowlist de esquema — a recusa na GRAVAÇÃO", () => {
     expect(motivoDaRecusaDoModelo("tel:")).toBe("sem_destino");
   });
 
+  it("o domínio fica fixo no modelo: marcador só entra depois da primeira `/`", () => {
+    // O valor do campo é escrito por quem atende e pela captação; ele preenche
+    // o caminho e a busca, nunca o destino. `encodeURIComponent` não codifica
+    // `.`, e por isso a régua mora no MODELO, antes da interpolação.
+    const dados: DadosDoAtalho = {
+      lead: { campos: { site: "outro-dominio.example", x: ".outro-dominio.example" } },
+    };
+    for (const url of [
+      "https://{{lead.site}}/pedido",
+      "https://erp.exemplo.com{{lead.x}}/p",
+      "http://erp.exemplo.com:{{lead.x}}/p",
+      "https://{{lead.x}}@erp.exemplo.com/p",
+    ]) {
+      expect(modeloAceito(url), url).toBe(false);
+      expect(motivoDaRecusaDoModelo(url), url).toBe("marcador_no_dominio");
+      expect(montarHref(url, dados), url).toBeNull();
+      expect(atalhosParaExibir([atalho({ url })], dados), url).toEqual([]);
+      expect(pipelineConfigPatchSchema.safeParse({ atalhos: [atalho({ url })] }).success, url).toBe(false);
+    }
+    // Depois da primeira `/`, `?` ou `#`, o marcador segue valendo.
+    expect(modeloAceito("https://erp.exemplo.com/{{lead.x}}")).toBe(true);
+    expect(modeloAceito("https://erp.exemplo.com?c={{lead.x}}")).toBe(true);
+    expect(modeloAceito("https://erp.exemplo.com#{{lead.x}}")).toBe(true);
+  });
+
   it("recusa acima do teto e caractere de controle em qualquer posição", () => {
     expect(modeloAceito(`https://exemplo.com/${"a".repeat(2100)}`)).toBe(false);
     expect(motivoDaRecusaDoModelo(`https://exemplo.com/${"a".repeat(2100)}`)).toBe("longo");

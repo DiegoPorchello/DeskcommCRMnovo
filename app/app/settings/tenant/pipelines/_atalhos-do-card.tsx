@@ -66,6 +66,8 @@ function fraseDaRecusa(recusa: RecusaDoModelo, t: Tradutor): string {
       return t("Falta o que vem depois do esquema.");
     case "sem_barras":
       return t("Depois do esquema, escreva // e o endereço.");
+    case "marcador_no_dominio":
+      return t("O domínio tem de ser fixo: use marcadores só depois da primeira /.");
   }
   // Inalcançável: o switch cobre a união inteira. Existe para o dia em que um
   // código novo entrar em `RecusaDoModelo` sem frase — aí o TypeScript acusa

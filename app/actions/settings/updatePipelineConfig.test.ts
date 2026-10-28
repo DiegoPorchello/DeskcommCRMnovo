@@ -323,6 +323,17 @@ describe("updatePipelineConfig — atalhos do card (#3487)", () => {
     expect(h.gravou).toBeNull();
   });
 
+  it.each(["https://{{lead.site}}/pedido", "https://erp.exemplo.com{{lead.x}}/p"])(
+    "recusa marcador no domínio (%j) SEM gravar nada",
+    async (url) => {
+      const r = await updatePipelineConfig(FUNIL, {
+        atalhos: [{ rotulo: "Pedido", icone: "link", url }],
+      });
+      expect(r).toMatchObject({ ok: false, error: "validation_failed" });
+      expect(h.gravou).toBeNull();
+    },
+  );
+
   it("grava os três esquemas permitidos no settings do funil", async () => {
     const atalhos = [
       LIGAR,

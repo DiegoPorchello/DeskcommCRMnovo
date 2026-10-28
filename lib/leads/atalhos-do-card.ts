@@ -131,6 +131,19 @@ export function esquemaDoModelo(bruto: string | null | undefined): string | null
 }
 
 /**
+ * `true` se o endereço `http(s)` tem marcador na AUTORIDADE (host, porta,
+ * usuário) — tudo entre o `//` e o primeiro `/`, `?`, `#` ou `\\`.
+ *
+ * `encodeURIComponent` não codifica `.`, então um marcador ali deixaria o valor
+ * de um campo escolher o domínio para onde o botão leva. O domínio é decisão de
+ * quem configura o funil; o dado do cliente só entra depois dele.
+ */
+function marcadorNoDominio(cauda: string): boolean {
+  const autoridade = cauda.slice(2).split(/[/?#\\]/, 1)[0] ?? "";
+  return autoridade.includes("{{");
+}
+
+/**
  * O modelo de link passa na régua? (gravação E renderização usam ESTA função.)
  *
  * As recusas, cada uma por um motivo concreto:
@@ -155,7 +168,10 @@ export function modeloAceito(bruto: string | null | undefined): boolean {
 
   const cauda = modelo.slice(esquema.length);
   if (cauda.trim() === "") return false;
-  if ((esquema === "http:" || esquema === "https:") && !cauda.startsWith("//")) return false;
+  if (esquema === "http:" || esquema === "https:") {
+    if (!cauda.startsWith("//")) return false;
+    if (marcadorNoDominio(cauda)) return false;
+  }
 
   return true;
 }
@@ -176,7 +192,8 @@ export type RecusaDoModelo =
   | "sem_esquema"
   | "esquema_proibido"
   | "sem_destino"
-  | "sem_barras";
+  | "sem_barras"
+  | "marcador_no_dominio";
 
 export function motivoDaRecusaDoModelo(
   bruto: string | null | undefined,
@@ -190,7 +207,10 @@ export function motivoDaRecusaDoModelo(
   if (!(ESQUEMAS_DE_ATALHO as readonly string[]).includes(esquema)) return "esquema_proibido";
   const cauda = modelo.slice(esquema.length);
   if (cauda.trim() === "") return "sem_destino";
-  if ((esquema === "http:" || esquema === "https:") && !cauda.startsWith("//")) return "sem_barras";
+  if (esquema === "http:" || esquema === "https:") {
+    if (!cauda.startsWith("//")) return "sem_barras";
+    if (marcadorNoDominio(cauda)) return "marcador_no_dominio";
+  }
   return null;
 }
 
