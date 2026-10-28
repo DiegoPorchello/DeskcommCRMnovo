@@ -19,6 +19,7 @@ import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitte
 import { listaLegivel } from "@/lib/leads/activity-vocabulary";
 import { camposAlterados } from "@/lib/leads/campos-alterados";
 import { valoresAntesDepois } from "@/lib/leads/valores-audit";
+import { mencionaRecorrencia, recorrenciaParaGravar } from "@/lib/leads/valor-recorrente";
 import { RECUSA_DE_TROCA_DE_FUNIL } from "@/lib/leads/clonar-para-funil";
 import {
   camposQueMudaram,
@@ -748,6 +749,13 @@ export async function createLeadHandler(
       description: input.description ?? null,
       contact_id: input.contact_id ?? null,
       value_cents: input.value_cents ?? null,
+      // O VALOR RECORRENTE — as três colunas da fatia 1 da #3602, SEMPRE
+      // nomeadas (nulas quando o negócio não tem recorrência). `value_cents`
+      // acima segue sendo o valor ÚNICO: nada é somado, e é por isso que o card
+      // consegue escrever "R$ 3.000 + R$ 500/mês". A coerência do trio
+      // (recorrente nulo ⇒ periodicidade e duração nulas; recorrente sem
+      // periodicidade ⇒ mensal) é da régua pura, a MESMA que o PATCH usa.
+      ...recorrenciaParaGravar(input),
       currency,
       ...ownerPatch,
       assigned_at:
@@ -958,6 +966,11 @@ export async function updateLeadHandler(
   if (input.description !== undefined) patch.description = input.description;
   if (input.contact_id !== undefined) patch.contact_id = input.contact_id;
   if (input.value_cents !== undefined) patch.value_cents = input.value_cents;
+  // O RECORRENTE SÓ É TOCADO quando a requisição o menciona (fatia 1 da #3602):
+  // um PATCH de título que carimbasse `null` nas três apagaria a mensalidade do
+  // negócio em silêncio. E, tocado, vai o TRIO coerente — mandar só
+  // `recurring_months` deixaria duração sem mensalidade no banco.
+  if (mencionaRecorrencia(input)) Object.assign(patch, recorrenciaParaGravar(input));
   if (input.currency !== undefined) patch.currency = input.currency;
   // Dono do negócio (0070): regra em lib/leads/owner-patch.ts, compartilhada
   // com create, bulk e MCP. owner_kind é DERIVADO — nunca lido do body.
@@ -1675,6 +1688,9 @@ export async function retomarLeadHandler(
     description?: string | null;
     contact_id?: string | null;
     value_cents?: number | null;
+    recurring_value_cents?: number | null;
+    recurring_period?: string | null;
+    recurring_months?: number | null;
     currency?: string | null;
     owner_user_id?: string | null;
     owner_agent_id?: string | null;
@@ -1815,6 +1831,16 @@ export async function retomarLeadHandler(
     },
     ...(copia("description") ? { description: origemTipada.description ?? null } : {}),
     ...(copia("value_cents") ? { value_cents: origemTipada.value_cents ?? null } : {}),
+    // O RECORRENTE acompanha o valor único quando a retomada copia valores
+    // (fatia 1 da #3602): reabrir o negócio só com o setup entregaria um
+    // contrato pela metade, e a mensalidade sumiria sem erro nenhum.
+    ...(copia("value_cents") && origemTipada.recurring_value_cents != null
+      ? {
+          recurring_value_cents: origemTipada.recurring_value_cents,
+          recurring_period: origemTipada.recurring_period ?? "monthly",
+          recurring_months: origemTipada.recurring_months ?? null,
+        }
+      : {}),
     ...(copia("currency") && origemTipada.currency ? { currency: origemTipada.currency } : {}),
     ...(copia("expected_close_date")
       ? { expected_close_date: origemTipada.expected_close_date ?? null }

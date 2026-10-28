@@ -4,6 +4,7 @@ import type { MouseEvent } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
+import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
 import { resolveCardState, stageAgeLabel, type CardInput } from "@/lib/kanban/card-state";
@@ -86,6 +87,20 @@ export function KanbanCard({
 }: KanbanCardProps) {
   const t = useT();
   const value = formatValor(card.valueCents, card.currency);
+  /**
+   * A MENSALIDADE, ao lado do valor único (fatia 1 da #3602): o card escreve
+   * "R$ 3.000 + R$ 500/mês". Os dois números aparecem — nunca a soma, que é
+   * exatamente o que a issue pediu para não fazer — e o negócio de valor único
+   * fica com a linha de sempre (o segundo trecho só existe quando há
+   * recorrência). `semCentavos` acompanha o valor único: o card nunca mostrou
+   * centavos, e a linha tem altura fixa.
+   */
+  const recorrente = rotuloDaRecorrencia(
+    card.recurringValueCents,
+    card.recurringPeriod,
+    card.currency ?? MOEDA_PADRAO,
+    { semCentavos: true, sufixo: t("/mês") },
+  );
   const state = resolveCardState(card, t);
   const age = stageAgeLabel(card.hoursInStage, t);
 
@@ -249,14 +264,28 @@ export function KanbanCard({
             />
           </div>
 
-          {/* ② valor — altura reservada mesmo sem valor, senão o card encolhe. */}
+          {/* ② valor — altura reservada mesmo sem valor, senão o card encolhe.
+              `card-valor` é o observável do teste: o MESMO elemento carrega o
+              valor único e a mensalidade, para nenhuma tela de teste achar que
+              "os dois aparecem" olhando dois lugares diferentes. */}
           <p
+            data-testid="card-valor"
             className={cn(
-              "mt-1 h-5 text-xs font-medium leading-5 tabular-nums",
-              value ? "text-text" : "text-text-muted",
+              "mt-1 flex h-5 items-baseline gap-1 text-xs font-medium leading-5 tabular-nums",
+              value || recorrente ? "text-text" : "text-text-muted",
             )}
+            title={recorrente ? `${value ?? ""} + ${recorrente}`.trim() : undefined}
           >
-            {value ?? "—"}
+            {(value || recorrente) && (
+              <span className="truncate">{value ?? t("Sem valor único")}</span>
+            )}
+            {recorrente && (
+              <span className="shrink-0 text-text-muted">
+                {value ? "+ " : ""}
+                {recorrente}
+              </span>
+            )}
+            {!value && !recorrente && "—"}
           </p>
 
           {/* ③ a linha do agente — um slot, três estados, nunca três blocos. */}

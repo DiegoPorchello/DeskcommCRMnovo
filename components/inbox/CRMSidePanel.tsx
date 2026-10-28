@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { activityLabel, actorLabel, actorShape } from "@/lib/leads/activity-vocabulary";
 import { soChavesAlteradas } from "@/lib/leads/custom-fields-so-diff";
+import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import { ConversationTagsEditor } from "./ConversationTagsEditor";
 import { ContactTagsEditor } from "./ContactTagsEditor";
 import { TarefasDaDemanda } from "./TarefasDaDemanda";
@@ -69,6 +70,10 @@ interface LeadRow {
   title: string;
   status: string;
   value_cents: number | null;
+  /** Mensalidade do negócio (fatia 1 da #3602); `null`/ausente = sem recorrência. */
+  recurring_value_cents?: number | null;
+  recurring_period?: string | null;
+  recurring_months?: number | null;
   currency: string | null;
   updated_at: string;
   pipeline_id: string;
@@ -390,6 +395,18 @@ function InboxLeadEditor({
   const t = useT();
   const ativo = leads.find((l) => l.id === selecionadoId) ?? leads[0]!;
   const status = (l: LeadRow) => t(STATUS_DO_LEAD[l.status] ?? l.status);
+  /**
+   * A MENSALIDADE do negócio, ao lado do valor único (fatia 1 da #3602).
+   *
+   * A régua é a mesma do card (`rotuloDaRecorrencia`), e `null` quando não há
+   * recorrência: negócio de valor único continua mostrando um número só — a
+   * mesma tela de antes. `sufixo` entra traduzido porque a frase é da tela, e a
+   * regra de qual texto cabe em qual periodicidade é do módulo puro.
+   */
+  const recorrenteDoNegocio = (l: LeadRow) =>
+    rotuloDaRecorrencia(l.recurring_value_cents, l.recurring_period, l.currency ?? "BRL", {
+      sufixo: t("/mês"),
+    });
 
   return (
     <div className="mt-2 space-y-2">
@@ -415,6 +432,14 @@ function InboxLeadEditor({
                   </div>
                   <div className="text-muted-foreground">
                     {status(l)} · {formatMoney(l.value_cents, l.currency)}
+                    {/* A MENSALIDADE ao lado do valor único (fatia 1 da #3602):
+                        os dois aparecem, e o negócio de valor único fica sem
+                        este trecho — nada de "/mês" inventado. */}
+                    {recorrenteDoNegocio(l) && (
+                      <span className="ml-1" data-testid={`inbox-lead-recorrente-${l.id}`}>
+                        + {recorrenteDoNegocio(l)}
+                      </span>
+                    )}
                   </div>
                 </button>
               </li>
@@ -425,6 +450,13 @@ function InboxLeadEditor({
       {leads.length === 1 && (
         <div data-testid="inbox-lead-unico" className="text-xs text-muted-foreground">
           <p>{ativo.title} · {status(ativo)}</p>
+          {/* O valor do negócio — único e recorrente — também no caso de UM só
+              negócio, que antes não mostrava valor nenhum no painel (fatia 1
+              da #3602: quem atende precisa ver o contrato sem abrir o quadro). */}
+          <p data-testid="inbox-lead-unico-valor">
+            {formatMoney(ativo.value_cents, ativo.currency)}
+            {recorrenteDoNegocio(ativo) && <> + {recorrenteDoNegocio(ativo)}</>}
+          </p>
           <p className={CLASSES_DE_ONDE_ESTA} title={ondeEstaOLead(ativo)}>
             {ondeEstaOLead(ativo)}
           </p>

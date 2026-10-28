@@ -62056,6 +62056,88 @@ alter table public.system_update_runs
 comment on column public.system_update_runs.force_requested is
   'Pedido restrito de reaplicar a atualização pelo agente do host; ausência ou false preserva o caminho normal.';
 
+-- ---- valor recorrente do negócio (migration 9028) ----
+-- manifest: **O negócio guarda o valor ÚNICO e o RECORRENTE (#3602, fatia 1).** `crm_leads.value_cents` continua sendo o valor único (setup, implantação, matrícula) e ganha três vizinhos: `recurring_value_cents` (bigint em centavos, MESMA régua do valor único), `recurring_period` (a v1 conhece `monthly`) e `recurring_months` (duração; nulo = sem prazo). Nada é somado e as três colunas nascem nulas — negócio de valor único fica idêntico ao de antes. Os CHECKs recusam mensalidade negativa, periodicidade fora de `monthly`, duração fora de 1..600 e o trio órfão. Painéis e previsão ficam para as fatias seguintes. Idempotente.
+--
+-- Bloco IDÊNTICO ao da migration 9028 (mesma ordem: colunas → CHECKs →
+-- comentários → privilégio → travas). Quem aplica a cadeia inteira e quem
+-- aplica só o baseline chegam ao mesmo schema.
+alter table public.crm_leads
+  add column if not exists recurring_value_cents bigint,
+  add column if not exists recurring_period      text,
+  add column if not exists recurring_months      integer;
+
+alter table public.crm_leads add column if not exists recurring_value_cents bigint;
+alter table public.crm_leads add column if not exists recurring_period      text;
+alter table public.crm_leads add column if not exists recurring_months      integer;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.crm_leads'::regclass
+       and conname  = 'crm_leads_recurring_value_cents_nao_negativo'
+  ) then
+    alter table public.crm_leads
+      add constraint crm_leads_recurring_value_cents_nao_negativo
+      check (recurring_value_cents is null or recurring_value_cents >= 0);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.crm_leads'::regclass
+       and conname  = 'crm_leads_recurring_period_conhecido'
+  ) then
+    alter table public.crm_leads
+      add constraint crm_leads_recurring_period_conhecido
+      check (recurring_period is null or recurring_period = 'monthly');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.crm_leads'::regclass
+       and conname  = 'crm_leads_recurring_months_no_prazo'
+  ) then
+    alter table public.crm_leads
+      add constraint crm_leads_recurring_months_no_prazo
+      check (recurring_months is null or recurring_months between 1 and 600);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.crm_leads'::regclass
+       and conname  = 'crm_leads_recorrencia_coerente'
+  ) then
+    alter table public.crm_leads
+      add constraint crm_leads_recorrencia_coerente
+      check (
+        (recurring_value_cents is null
+          and recurring_period is null
+          and recurring_months is null)
+        or (recurring_value_cents is not null and recurring_period is not null)
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.crm_leads') is not null then
+    comment on column public.crm_leads.recurring_value_cents is
+      'Mensalidade do negócio em centavos (fatia 1 da #3602), separada do value_cents, que continua sendo o valor único (setup, implantação, matrícula). Nula = negócio sem recorrência.';
+    comment on column public.crm_leads.recurring_period is
+      'Periodicidade da recorrência; a v1 conhece monthly. Preenchida sempre que recurring_value_cents não é nulo (o CHECK crm_leads_recorrencia_coerente exige).';
+    comment on column public.crm_leads.recurring_months is
+      'Duração do contrato em meses (1..600). Nula = sem prazo, que NÃO é 12 meses: é contrato aberto.';
+  end if;
+end
+$$;
+
+grant select, insert, update, delete on public.crm_leads to authenticated;
+grant all on public.crm_leads to service_role;
+
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

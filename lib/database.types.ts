@@ -6679,6 +6679,9 @@ export type Database = {
           owner_user_id: string | null;
           pipeline_id: string;
           position_in_stage: number;
+          recurring_months: number | null;
+          recurring_period: string | null;
+          recurring_value_cents: number | null;
           retomado_de_lead_id: string | null;
           source: string;
           source_metadata: NonNullable<Json>;
@@ -6714,6 +6717,9 @@ export type Database = {
           owner_user_id?: string | null;
           pipeline_id: string;
           position_in_stage?: number;
+          recurring_months?: number | null;
+          recurring_period?: string | null;
+          recurring_value_cents?: number | null;
           retomado_de_lead_id?: string | null;
           source?: string;
           source_metadata?: NonNullable<Json>;
@@ -6748,6 +6754,9 @@ export type Database = {
           owner_user_id?: string | null;
           pipeline_id?: string;
           position_in_stage?: number;
+          recurring_months?: number | null;
+          recurring_period?: string | null;
+          recurring_value_cents?: number | null;
           retomado_de_lead_id?: string | null;
           source?: string;
           source_metadata?: NonNullable<Json>;

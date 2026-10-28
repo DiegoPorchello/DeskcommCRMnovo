@@ -8,6 +8,8 @@ import { useT } from "@/hooks/i18n/useT";
 import { useLeadsPaginados } from "@/hooks/kanban/useLeadsPaginados";
 import { camposDoFunil, camposPorEscopo } from "@/lib/leads/campos-do-funil";
 import { formatValorDoNegocio } from "@/lib/money";
+import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
+import type { Lead } from "@/lib/types/leads";
 import type { Pipeline, Stage } from "@/lib/kanban/types";
 
 import { LeadDossier } from "./LeadDossier";
@@ -89,6 +91,26 @@ export function ListaDoFunil({ pipelineId, pipeline: funil, stages }: Props) {
 
   const nomeDaEtapa = (stageId: string) => stages.find((s) => s.id === stageId)?.name ?? "—";
 
+  /**
+   * O valor ÚNICO da linha, na moeda do negócio (a organização é a reserva) e
+   * sem centavos — a mesma régua da coluna de valor desde a fatia 1 da #3172.
+   */
+  const valorUnico = (l: Lead): string | null =>
+    l.value_cents === null || l.value_cents === undefined
+      ? null
+      : formatValorDoNegocio(l.value_cents, l.currency ?? "BRL", { semCentavos: true });
+
+  /**
+   * A MENSALIDADE na MESMA célula (fatia 1 da #3602), em linha própria: a
+   * coluna é estreita e "R$ 3.000 + R$ 500/mês" numa linha só empurraria a
+   * tabela. Os dois valores aparecem, nunca a soma.
+   */
+  const recorrente = (l: Lead): string | null =>
+    rotuloDaRecorrencia(l.recurring_value_cents, l.recurring_period, l.currency ?? "BRL", {
+      semCentavos: true,
+      sufixo: t("/mês"),
+    });
+
   return (
     <div className="flex flex-1 flex-col gap-3" data-testid="lista-do-funil">
       {error ? (
@@ -145,11 +167,13 @@ export function ListaDoFunil({ pipelineId, pipeline: funil, stages }: Props) {
                   </td>
                   <td className="p-3 text-muted-foreground">{nomeDaEtapa(l.stage_id)}</td>
                   <td className="p-3 text-right tabular-nums">
-                    {l.value_cents === null || l.value_cents === undefined
-                      ? "—"
-                      : formatValorDoNegocio(l.value_cents, l.currency ?? "BRL", {
-                          semCentavos: true,
-                        })}
+                    {valorUnico(l) ?? (recorrente(l) ? "" : "—")}
+                    {recorrente(l) && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {valorUnico(l) ? "+ " : ""}
+                        {recorrente(l)}
+                      </span>
+                    )}
                   </td>
                   <td className="p-3 text-muted-foreground">
                     {l.last_activity_at

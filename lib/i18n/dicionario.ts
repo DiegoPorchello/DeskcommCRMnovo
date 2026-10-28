@@ -10034,6 +10034,19 @@ export const DICIONARIO: Traducoes = {
   "Abrir esta conversa no Inbox": { es: "Abrir esta conversación en Inbox" },
   "conversa sem mensagens": { es: "conversación sin mensajes" },
   "Valor inválido": { es: "Valor inválido" },
+  // O VALOR RECORRENTE do negócio (#3602): setup + mensalidade no mesmo card.
+  // "sem prazo" é o estado de omitir a duração — não é 12 meses, é contrato
+  // aberto, e o texto tem de dizer isso sem parecer erro.
+  "Valor recorrente (mensal)": { es: "Valor recurrente (mensual)" },
+  "Duração (meses)": { es: "Duración (meses)" },
+  "sem prazo": { es: "sin plazo" },
+  "Duração inválida": { es: "Duración inválida" },
+  "Informe a mensalidade para usar a duração": {
+    es: "Informa la mensualidad para usar la duración",
+  },
+  "Sem valor único": { es: "Sin valor único" },
+  // O sufixo da mensalidade colado ao valor ("R$ 500/mês"), nas telas de leitura.
+  "/mês": { es: "/mes" },
   "Lead atualizado": { es: "Lead actualizado" },
   "Editar lead": { es: "Editar lead" },
   "Atualize os campos. Mover de etapa ou marcar ganho/perdido tem opções próprias.": {
