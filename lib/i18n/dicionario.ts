@@ -16356,6 +16356,9 @@ export const DICIONARIO: Traducoes = {
   "Marque o que este agente pode usar. A marca de leitura ou escrita é sua: o servidor pode declarar leitura, mas quem decide é você.": {
     es: "Marca lo que este agente puede usar. La marca de lectura o escritura es tuya: el servidor puede declarar lectura, pero quien decide eres tú.",
   },
+  "Ferramenta marcada como escrita não roda durante a conversa com o cliente: para consultas, escolha Leitura.": {
+    es: "Una herramienta marcada como escritura no se ejecuta durante la conversación con el cliente: para consultas, elige Lectura.",
+  },
   "As ferramentas já marcadas nesta versão continuam como estão.": {
     es: "Las herramientas ya marcadas en esta versión siguen como están.",
   },

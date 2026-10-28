@@ -51,6 +51,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/feedback/ApiErrorToast", () => ({ showApiError: vi.fn() }));
 
 import { ServidorExternoNoAtendimento } from "@/app/app/ai/agents/[id]/_components/ServidorExternoNoAtendimento";
+import { TETO_TOOLS_POR_AGENTE } from "@/lib/mcp/tools/selecao-por-pacote";
 
 /** As três ferramentas do ERP do relato da #3586, todas declaradas leitura. */
 const FERRAMENTAS = [
@@ -243,6 +244,24 @@ describe("editor do agente — ferramentas do servidor MCP externo (#3586)", () 
       "mcp_externo:leitura:buscar_carros",
     ]);
     expect(screen.queryByTestId("remotas-orfas")).toBeNull();
+  });
+
+  it("com o teto de capacidades cheio, marcar mais uma é recusado e tool_ids não muda", async () => {
+    const cheio = Array.from({ length: TETO_TOOLS_POR_AGENTE }, (_, i) => `nativa_${i}`);
+    render(<Bancada idsIniciais={cheio} />);
+    await waitFor(() => expect(screen.getByTestId("ferramentas-do-servidor")).toBeTruthy());
+
+    marcar("buscar_carros");
+
+    expect(screen.getByTestId("recusa-teto").textContent).toContain(String(TETO_TOOLS_POR_AGENTE));
+    expect(idsNaTela()).toEqual(cheio);
+  });
+
+  it("avisa que a marca escrita não roda na conversa com o cliente", async () => {
+    render(<Bancada />);
+    await waitFor(() => expect(screen.getByTestId("ferramentas-do-servidor")).toBeTruthy());
+
+    expect(screen.getByTestId("aviso-escrita-na-conversa").textContent).toContain("escolha Leitura");
   });
 
   it("agente com a opção DESLIGADA não faz rede e não mexe em tool_ids", async () => {

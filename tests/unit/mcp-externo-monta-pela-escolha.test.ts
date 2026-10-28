@@ -34,7 +34,13 @@ import {
 import { escolhasRemotas, toolIdRemoto } from "@/lib/mcp/servidor-externo/ids";
 import type { ServidorMcpExterno } from "@/lib/mcp/servidor-externo/registro";
 import { definirFerramentasRemotas } from "@/lib/mcp/tools/externo";
-import { ligarPacote, type CapacidadeSelecionavel } from "@/lib/mcp/tools/selecao-por-pacote";
+import {
+  ligarPacote,
+  TETO_TOOLS_POR_AGENTE,
+  vagasExigidasPeloPacote,
+  vagasRestantes,
+  type CapacidadeSelecionavel,
+} from "@/lib/mcp/tools/selecao-por-pacote";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
 
@@ -222,5 +228,23 @@ describe("o seletor de capacidades não apaga a escolha remota (#3586)", () => {
     const depois = ligarPacote(["crm_search_products", remota], catalogo, "atender");
     expect(depois).toContain(remota);
     expect(depois).toContain("crm_search_products");
+  });
+
+  it("a remota conta no teto nas duas direções: vagas restantes e vaga exigida pelo pacote", () => {
+    // 26 nativas fora do pacote + 1 remota = teto cheio. O pacote `atender`
+    // traz 1 automática e 1 crítica (reservada): 27 + 2 = 29. Se a remota
+    // sumisse da conta (ligarPacote a descartando, ou o seletor a filtrando),
+    // daria 28 — e o seletor deixaria ligar uma capacidade além do zod.
+    const nativas: CapacidadeSelecionavel[] = Array.from({ length: 26 }, (_, i) => ({
+      name: `nativa_${i}`,
+      risco: "seguro",
+      pacotes: ["organizar"],
+    }));
+    const cat = [...nativas, ...catalogo];
+    const sel = [...nativas.map((c) => c.name), toolIdRemoto("buscar_carros", "leitura")];
+
+    expect(sel).toHaveLength(TETO_TOOLS_POR_AGENTE);
+    expect(vagasRestantes(sel)).toBe(0);
+    expect(vagasExigidasPeloPacote(sel, cat, "atender")).toBe(TETO_TOOLS_POR_AGENTE + 2);
   });
 });

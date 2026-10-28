@@ -224,6 +224,11 @@ export function ServidorExternoNoAtendimento({
               "Marque o que este agente pode usar. A marca de leitura ou escrita é sua: o servidor pode declarar leitura, mas quem decide é você.",
             )}
           </p>
+          <p data-testid="aviso-escrita-na-conversa" className="text-xs text-muted-foreground">
+            {t(
+              "Ferramenta marcada como escrita não roda durante a conversa com o cliente: para consultas, escolha Leitura.",
+            )}
+          </p>
 
           {erro ? (
             <p
