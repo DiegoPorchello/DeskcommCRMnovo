@@ -571,9 +571,10 @@ export async function loadCrmExtensions(organizationId: string): Promise<Extensi
   const session = await createClient();
   const result = await session
     .from("organization_extensions")
-    .select("installation_id")
+    .select("installation_id, extension_installations(installed_at)")
     .eq("organization_id", organizationId)
     .eq("enabled", true)
+    .order("installed_at", { referencedTable: "extension_installations" })
     .limit(8);
   dbFailure(result.error);
   const ids = z.array(z.object({ installation_id: uuid })).parse(result.data ?? []);
