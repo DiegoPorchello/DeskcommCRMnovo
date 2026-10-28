@@ -36,8 +36,15 @@ create table if not exists public.attendant_sectors (
 create unique index if not exists attendant_sectors_org_name_unique
   on public.attendant_sectors (organization_id, lower(btrim(name)));
 
+-- Sem FK direta para `organizations`: a PK (organization_id, user_id) já cobre a
+-- FK para `user_organizations`, e cobrir também uma para `organizations` faz o
+-- PostgREST ver esta tabela como junção user_organizations <-> organizations e
+-- responder 300 PGRST201 em todo embed sem nome de FK (#3219, o defeito que a
+-- 0717 desfez em calendar_service_professionals). A organização continua
+-- garantida e em cascata: pela FK para `user_organizations`, que referencia
+-- `organizations`, e pela FK para `attendant_sectors`.
 create table if not exists public.attendant_sector_members (
-  organization_id uuid not null references public.organizations(id) on delete cascade,
+  organization_id uuid not null,
   sector_id       uuid not null,
   user_id         uuid not null,
   created_at      timestamptz not null default now(),
@@ -48,6 +55,10 @@ create table if not exists public.attendant_sector_members (
   foreign key (organization_id, user_id)
     references public.user_organizations (organization_id, user_id) on delete cascade
 );
+
+-- Quem aplicou uma versão anterior desta migration, com a FK direta, perde-a aqui.
+alter table public.attendant_sector_members
+  drop constraint if exists attendant_sector_members_organization_id_fkey;
 
 create index if not exists attendant_sector_members_sector
   on public.attendant_sector_members (organization_id, sector_id);

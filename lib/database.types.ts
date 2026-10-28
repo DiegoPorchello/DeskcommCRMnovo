@@ -2519,13 +2519,6 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "attendant_sector_members_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "attendant_sector_members_organization_id_sector_id_fkey";
             columns: ["organization_id", "sector_id"];
             isOneToOne: false;
