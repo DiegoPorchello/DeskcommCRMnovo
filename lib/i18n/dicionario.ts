@@ -18114,7 +18114,7 @@ export const DICIONARIO: Traducoes = {
   // faixa de botões do dossiê e do painel do Inbox. As frases de recusa são as
   // do editor; o motivo vem do domínio como CÓDIGO e é traduzido aqui, porque
   // a chave precisa ser literal para o guarda de espanhol enxergá-la.
-  "Atalhos do card": { es: "Accesos del tarjeta" },
+  "Atalhos do card": { es: "Accesos de la tarjeta" },
   "Atalhos do negócio": { es: "Accesos del negocio" },
   "Adicionar atalho": { es: "Añadir acceso" },
   "Remover atalho": { es: "Quitar acceso" },
