@@ -204,15 +204,15 @@ describe("#3639 — a trava é gravada e lida no item da Central, com prazo e do
   });
 
   it("a corrida de duas rodadas na MESMA ocasião é a trava trabalhando, não erro", () => {
-    // O índice único (9037) recusa o segundo INSERT da mesma ocasião: registrar
+    // O índice único (9038) recusa o segundo INSERT da mesma ocasião: registrar
     // isso como `aviso_falhou` seria mentira no log, porque o aviso saiu.
     expect(fonte).toContain('erroInbox.code === "23505"');
     expect(fonte).toContain('pular("corrida_na_mesma_ocasiao")');
   });
 
   it("a migration existe, é idempotente e fecha a ocasião com índice único", () => {
-    const arquivo = migrations.find((f) => f.includes("9037") && f.includes("rearma_na_ocasiao"));
-    expect(arquivo, "migration 9037 ausente").toBeTruthy();
+    const arquivo = migrations.find((f) => f.includes("9038") && f.includes("rearma_na_ocasiao"));
+    expect(arquivo, "migration 9038 ausente").toBeTruthy();
     const sql = readFileSync(join(RAIZ, "supabase", "migrations", arquivo!), "utf8");
     expect(sql.startsWith("-- manifest: ")).toBe(true);
     expect(sql).toContain("add column if not exists task_reminder_due_at timestamptz");

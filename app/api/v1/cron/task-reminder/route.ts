@@ -56,7 +56,7 @@
  * assumia nunca era avisado, e adiar para amanhã não rearmava a antecedência
  * de amanhã. A identidade passa a ser a OCASIÃO (categoria + tarefa +
  * responsável + prazo, `OcasiaoDoAviso`), lida de `para_user_id` (0689) e de
- * `task_reminder_due_at` (9037) no item já gravado e da própria linha da
+ * `task_reminder_due_at` (9038) no item já gravado e da própria linha da
  * tarefa na decisão. Voltar ao responsável/prazo ANTERIOR reencontra a ocasião
  * antiga e não avisa de novo: a ocasião é a mesma, e o histórico fica onde
  * está.
@@ -173,7 +173,7 @@ export interface LembreteDecidido {
  * aviso. Os quatro são lidos dos dois lados da trava — da linha da tarefa na
  * decisão (`ocasiaoDaTarefa`) e do item já gravado na leitura
  * (`ocasiaoDoAvisoSalvo`) —, e é por isso que a coluna `task_reminder_due_at`
- * (9037) existe: o responsável já estava em `para_user_id` (0689), o prazo não
+ * (9038) existe: o responsável já estava em `para_user_id` (0689), o prazo não
  * estava em lugar nenhum.
  */
 export interface OcasiaoDoAviso {
@@ -300,7 +300,7 @@ export function lembretesDaRodada(
  * inteira, que é o defeito que o doc de decisão 162 fechou. O título é o nome
  * da tarefa (ver o comentário no insert).
  *
- * `task_reminder_due_at` (9037) é o PRAZO que originou o aviso, e é o que
+ * `task_reminder_due_at` (9038) é o PRAZO que originou o aviso, e é o que
  * transforma o item na trava da OCASIÃO (#3639): a rodada seguinte compara este
  * instante com o prazo atual da tarefa, e um prazo novo rearma o lembrete. A
  * gravação e a leitura passam pela MESMA conta (`ocasiaoDaTarefa` /
@@ -401,7 +401,7 @@ async function rodar(admin: ReturnType<typeof createAdminClient>, requestId: str
   // ─── A trava de "já avisado", lida do próprio item da Central ─────────────
   //
   // O recorte é a OCASIÃO (#3639), não o par `kind + ref_id`: o prazo que
-  // originou o aviso (`task_reminder_due_at`, 9037) e o responsável que o
+  // originou o aviso (`task_reminder_due_at`, 9038) e o responsável que o
   // recebeu (`para_user_id`, 0689) vêm junto, senão o aviso antigo de um prazo
   // ou de uma pessoa cobre o prazo/pessoa novo.
   const { data: avisos, error: erroAvisos } = await admin
@@ -420,7 +420,7 @@ async function rodar(admin: ReturnType<typeof createAdminClient>, requestId: str
     const texto = textoDoAvisoDeTarefa(categoria, tarefa);
 
     // IN-APP: o item da Central do RESPONSÁVEL (`para_user_id`, 0689). A trava
-    // de "já avisado" mora nele — e, desde a 9037, ele também REGISTRA a
+    // de "já avisado" mora nele — e, desde a 9038, ele também REGISTRA a
     // ocasião (o prazo que a motivou), então a rodada seguinte sabe distinguir
     // "esta pessoa já foi avisada deste prazo" de "esta tarefa já avisou".
     // Duas rodadas concorrentes na MESMA ocasião caem no índice único

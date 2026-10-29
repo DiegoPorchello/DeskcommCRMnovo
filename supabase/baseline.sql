@@ -65615,10 +65615,10 @@ update public.lead_field_proposals p
    );
 
 
--- ---- lembrete de tarefa rearma na ocasião nova (migration 9037) ----
+-- ---- lembrete de tarefa rearma na ocasião nova (migration 9038) ----
 -- manifest: **O lembrete de tarefa rearma na OCASIÃO, não na tarefa (#3639).** `agent_inbox_items.task_reminder_due_at timestamptz null` guarda o PRAZO que originou o aviso `task_due`/`task_overdue`; com `para_user_id` (0689) fecha a identidade — categoria + tarefa + responsável + prazo —, então responsável novo ou prazo novo rearma, e a rodada repetida sem mudança continua silenciosa (#2529). `inbox_task_reminder_ocasiao_unique` fecha a corrida de duas rodadas sobre a mesma ocasião.
 
--- 9037 — O LEMBRETE DE TAREFA REARMA NA OCASIÃO (#3639)
+-- 9038 — O LEMBRETE DE TAREFA REARMA NA OCASIÃO (#3639)
 --
 -- A trava de "já avisado" é o próprio item da Central (#2529): `kind + ref_id`
 -- dizia "esta tarefa já pediu gente" — e uma tarefa pede gente mais de uma

@@ -1,7 +1,7 @@
 -- manifest: **O lembrete de tarefa rearma na OCASIÃO, não na tarefa (#3639).** `agent_inbox_items.task_reminder_due_at timestamptz null` guarda o PRAZO que originou o aviso `task_due`/`task_overdue`; junto de `para_user_id` (0689) ele fecha a identidade do lembrete — categoria + tarefa + responsável + prazo —, então trocar o responsável ou adiar o prazo é ocasião NOVA e volta a avisar, enquanto a rodada repetida sem mudança continua silenciosa (#2529). Nulo nos avisos que não são de prazo de tarefa; o de compromisso tem coluna própria (`appointment_revision`, 0224). Backfill dos avisos existentes usa o prazo ATUAL da tarefa (quem teve o prazo alterado antes desta migration é avisado uma vez, que é exatamente o defeito que ela conserta) e `inbox_task_reminder_ocasiao_unique` fecha a corrida de duas rodadas sobre a MESMA ocasião, com dedupe antes de criar o índice. Idempotente.
 
 -- ============================================================================
--- 9037 — O LEMBRETE DE TAREFA REARMA NA OCASIÃO (#3639)
+-- 9038 — O LEMBRETE DE TAREFA REARMA NA OCASIÃO (#3639)
 --
 -- A trava de "já avisado" da #2529 é o próprio item da Central: o par
 -- `kind + ref_id` dizia "esta tarefa já pediu gente". Só que uma tarefa pede
