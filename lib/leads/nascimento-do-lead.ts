@@ -425,9 +425,11 @@ export async function garantirLeadDaConversa(
   //
   // ⚠️ AS TRÊS CHAVES DE `settings.crm` SÃO LIDAS DE UMA VEZ. Uma consulta por
   // chave seriam três `select` na mesma linha de `organizations`, no caminho
-  // quente da ingestão. E a leitura da VENDA só acontece com a chave ligada —
-  // desligada (o padrão de toda instalação), esta entrega não custa nenhuma ida
-  // ao banco a mais do que custava antes.
+  // quente da ingestão. E a leitura da VENDA só acontece com a chave ligada.
+  // A leitura das regras, porém, roda em todo nascimento de card, com a opção
+  // desligada também: antes, o contato sem `first_service_at` não lia
+  // `organizations` aqui; agora lê uma vez. É uma consulta por card que nasce
+  // (o passo 2 já saiu quando há demanda aberta), não por mensagem.
   const regras = await lerRegrasDeCliente(db, organizationId);
   const venda = regras.pelaVenda ? await lerVendaAnterior(db, organizationId, contactId) : null;
   const pelaVenda = decidirPelaVenda({

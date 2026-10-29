@@ -13318,6 +13318,9 @@ export const DICIONARIO: Traducoes = {
   "Sem janela: todo retorno de quem já comprou abre negócio.": {
     es: "Sin ventana: todo regreso de quien ya compró abre negocio.",
   },
+  "Janela guardada, mas sem efeito: ela só vale com a opção acima ligada.": {
+    es: "Ventana guardada, pero sin efecto: solo vale con la opción de arriba activada.",
+  },
   "Janela ativa: compras dos últimos": { es: "Ventana activa: compras de los últimos" },
   "dias não abrem negócio novo.": { es: "días no abren negocio nuevo." },
   "Use um número inteiro entre 0 e 365.": { es: "Usa un número entero entre 0 y 365." },

@@ -135,8 +135,12 @@ export function ClientePelaVenda({
           </Button>
         </div>
         <p className="mt-2 text-xs" data-testid="pos-venda-dias-estado">
+          {/* Desligada, a janela não vale: `decidirPelaVenda` devolve "sem venda"
+              antes de olhar a janela. O texto acompanha o interruptor. */}
           {janelaGravada === 0
             ? t("Sem janela: todo retorno de quem já comprou abre negócio.")
+            : !valor
+              ? t("Janela guardada, mas sem efeito: ela só vale com a opção acima ligada.")
             : `${t("Janela ativa: compras dos últimos")} ${janelaGravada} ${t("dias não abrem negócio novo.")}`}
         </p>
         {janelaInvalida && (
