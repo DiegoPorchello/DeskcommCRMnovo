@@ -54,7 +54,12 @@ vi.mock("@/lib/mcp/conferencia-de-campos", () => ({
 /* O card é drag-and-drop e tem slots que leem hooks: aqui interessa a linha do
  * VALOR, que é do próprio card. Os vizinhos entram como nulos para o render não
  * depender de rede. */
+// A lateral do atendimento renderiza o diálogo de módulos (#3008), que usa os
+// três componentes do pacote; o dublê precisa cobrir os três, não só o do card.
 vi.mock("@hello-pangea/dnd", () => ({
+  DragDropContext: ({ children }: { children: unknown }) => children,
+  Droppable: ({ children }: { children: (p: unknown) => unknown }) =>
+    children({ innerRef: () => undefined, droppableProps: {}, placeholder: null }),
   Draggable: ({ children }: { children: (p: unknown, s: unknown) => unknown }) =>
     children({ innerRef: () => undefined, draggableProps: {}, dragHandleProps: {} }, { isDragging: false }),
 }));
