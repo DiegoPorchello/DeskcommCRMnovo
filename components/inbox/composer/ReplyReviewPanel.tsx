@@ -35,18 +35,12 @@ export function ReplyReviewPanel({
   // A causa do veto, em linguagem de quem opera (issue #2975): sem código
   // conhecido, a frase genérica de sempre continua sendo a verdade.
   const motivo = draft ? motivoDoVeto(draft.error_code) : null;
-  // Pendente COM texto e COM código é a reescrita (doc de decisão 234): a
-  // prévia barrou a primeira versão e o agente escreveu outra na mesma rodada.
-  // Os códigos de parada (`no_candidate`, truncamento, teto) só nascem SEM
-  // candidato (`desfechoSemCandidato`), então texto gerado aqui exclui os dois.
-  // `unknown_preview_tool` também fica de fora: a prévia o grava quando o modelo
-  // chama uma ferramenta que ela não conhece, sem nenhum envio recusado — é o
-  // único código do mapa que convive com texto aceito sem versão barrada.
-  const reescritaDepoisDeBarrada =
-    draft?.status === "pending" &&
-    !!motivo &&
-    motivo.codigo !== "unknown_preview_tool" &&
-    !!draft.original_body?.trim();
+  // Pendente COM texto e COM código de veto de envio (doc de decisão 234): a
+  // prévia barrou uma versão anterior e a sugestão oferecida veio depois. Só os
+  // vetos de envio têm `causa`; paradas e `unknown_preview_tool` não barram
+  // versão nenhuma. O aviso não diz que ESTE texto é a reescrita: o rascunho
+  // grava só `impediments[0]`, e a barrada pode ter sido outra mensagem.
+  const barrada = draft?.status === "pending" && draft.original_body?.trim() ? motivo : null;
   async function generate() {
     setNotice(null);
     setBusy(true);
@@ -132,10 +126,12 @@ export function ReplyReviewPanel({
               "Aprovar envia somente este texto. Não altera dados, agenda ou a autonomia do agente.",
             )}
           </p>
-          {reescritaDepoisDeBarrada && motivo && (
+          {barrada?.causa && (
             <p className="text-xs text-muted-foreground">
-              {t("A primeira versão desta resposta foi barrada; este texto é a reescrita. Motivo:")}{" "}
-              {t(motivo.texto)}
+              {t("Uma versão anterior desta sugestão foi barrada: {causa}. Confira antes de enviar.").replace(
+                "{causa}",
+                t(barrada.causa),
+              )}
             </p>
           )}
           {body && (
