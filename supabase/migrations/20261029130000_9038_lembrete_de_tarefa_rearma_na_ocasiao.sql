@@ -51,6 +51,10 @@ update public.agent_inbox_items as aviso
 -- avisado" não é transacional). O índice único abaixo exige uma linha por
 -- ocasião, então o que já duplicou é fechado ANTES: fica a mais antiga, e as
 -- repetidas viram `resolved` — mesma ocasião, mesmo aviso, sem perder histórico.
+-- O índice deixa o `resolved` de fora, e é isso que faz o dedupe valer: sem o
+-- filtro, a repetida resolvida continuava dentro dele e a criação do índice
+-- falhava (medido num pg17 com dois avisos legados da mesma tarefa). A trava
+-- da rodada lê todos os status, então o aviso resolvido segue sem repetir.
 with repetidas as (
   select id,
          row_number() over (
@@ -71,6 +75,6 @@ update public.agent_inbox_items as aviso
 
 create unique index if not exists inbox_task_reminder_ocasiao_unique
   on public.agent_inbox_items (organization_id, ref_id, kind, para_user_id, task_reminder_due_at)
-  where ref_kind = 'task' and task_reminder_due_at is not null;
+  where ref_kind = 'task' and task_reminder_due_at is not null and status <> 'resolved';
 
 notify pgrst, 'reload schema';

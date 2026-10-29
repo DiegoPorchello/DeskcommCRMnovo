@@ -65672,6 +65672,8 @@ update public.agent_inbox_items as aviso
    and aviso.task_reminder_due_at is null
    and tarefa.due_date is not null;
 -- Dedupe ANTES do índice único (o update.sh reaplica em banco que já duplicou).
+-- O índice deixa o `resolved` de fora: sem isso a repetida resolvida seguia
+-- dentro dele e a criação do índice falhava.
 with repetidas as (
   select id,
          row_number() over (
@@ -65691,4 +65693,4 @@ update public.agent_inbox_items as aviso
    and aviso.status <> 'resolved';
 create unique index if not exists inbox_task_reminder_ocasiao_unique
   on public.agent_inbox_items (organization_id, ref_id, kind, para_user_id, task_reminder_due_at)
-  where ref_kind = 'task' and task_reminder_due_at is not null;
+  where ref_kind = 'task' and task_reminder_due_at is not null and status <> 'resolved';

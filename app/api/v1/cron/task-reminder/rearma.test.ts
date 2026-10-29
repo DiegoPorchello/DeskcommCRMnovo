@@ -220,10 +220,20 @@ describe("#3639 — a trava é gravada e lida no item da Central, com prazo e do
     // Dedupe ANTES do índice: o `update.sh` do self-host reaplica o bloco num
     // banco que pode já ter duplicado da corrida antiga, e o índice falharia.
     expect(sql.indexOf("with repetidas as")).toBeLessThan(sql.indexOf("create unique index"));
+    // O dedupe RESOLVE a repetida; ela só sai do índice se o índice deixar o
+    // `resolved` de fora — sem o filtro, a duplicata fica e o índice falha.
+    expect(indiceDaOcasiao(sql)).toContain("status <> 'resolved'");
   });
 
   it("o baseline do self-host espelha a coluna e o índice (senão o kit não recebe)", () => {
     expect(baseline).toContain("add column if not exists task_reminder_due_at timestamptz");
     expect(baseline).toContain("create unique index if not exists inbox_task_reminder_ocasiao_unique");
+    expect(indiceDaOcasiao(baseline)).toContain("status <> 'resolved'");
   });
 });
+
+/** O comando do índice único da ocasião, até o `;` que o fecha. */
+function indiceDaOcasiao(sql: string): string {
+  const inicio = sql.indexOf("create unique index if not exists inbox_task_reminder_ocasiao_unique");
+  return sql.slice(inicio, sql.indexOf(";", inicio));
+}
