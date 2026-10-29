@@ -47,19 +47,28 @@ const INBOX = join(RAIZ, "lib", "inbox", "template-vars.ts");
 const CAMPANHA = join(RAIZ, "lib", "campanhas", "renderizador.ts");
 
 /**
- * O vocabulário do Inbox, lido do fonte: ele não exporta a lista (é detalhe
- * interno), mas é ELA que o catálogo tem de espelhar. Se o array mudar de nome,
- * isto reprova com a mensagem do `throw` — e não passa em silêncio.
+ * O vocabulário de um resolvedor, lido do próprio fonte — a lista que precisa
+ * espelhar o catálogo é a que está no código, não uma segunda cópia escrita
+ * aqui. Se o array mudar de nome, isto reprova com a mensagem do `throw` em vez
+ * de passar em silêncio com uma lista vazia.
  */
-const VARIAVEIS_DO_INBOX = (() => {
-  const bloco = /const VARIAVEIS_DE_NOME = \[([^\]]*)\]/.exec(readFileSync(INBOX, "utf8"));
-  if (!bloco) throw new Error("VARIAVEIS_DE_NOME não encontrada em lib/inbox/template-vars.ts");
+function listaDoFonte(fonte: string, nome: string): string[] {
+  const bloco = new RegExp(`${nome}\\s*=\\s*\\[([^\\]]*)\\]`).exec(fonte);
+  if (!bloco) throw new Error(`${nome} não encontrada no fonte`);
   return [...(bloco[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1] as string);
-})();
+}
 
-/** O da campanha: as chaves fechadas exportadas + as duas raízes de campo. */
+/** O Inbox não exporta a lista (é detalhe interno), mas é ELA que o catálogo espelha. */
+const VARIAVEIS_DO_INBOX = listaDoFonte(readFileSync(INBOX, "utf8"), "const VARIAVEIS_DE_NOME");
+
+/** O da campanha: as chaves fechadas + as duas raízes de campo, que são caminho. */
+const VARIAVEIS_DA_CAMPANHA_DO_FONTE = listaDoFonte(
+  readFileSync(CAMPANHA, "utf8"),
+  "VARIAVEIS_DA_CAMPANHA",
+);
+
 const VARIAVEIS_DA_CAMPANHA_NO_CATALOGO = [
-  ...VARIAVEIS_DA_CAMPANHA,
+  ...VARIAVEIS_DA_CAMPANHA_DO_FONTE,
   ...RAIZES_DE_CAMPO.map((raiz) => `${raiz}${SUFIXO_DE_CURINGA}`),
 ];
 
@@ -120,6 +129,9 @@ describe("o vocabulário do catálogo é exatamente o dos dois resolvedores", ()
   });
 
   it("campanha: as três chaves exportadas mais as duas raízes de campo", () => {
+    // O que o módulo exporta e o que está escrito no fonte são a mesma lista —
+    // se divergirem, quem lê o código e quem importa estão vendo coisas diferentes.
+    expect([...VARIAVEIS_DA_CAMPANHA]).toEqual(VARIAVEIS_DA_CAMPANHA_DO_FONTE);
     expect([...variaveisDe("campanha")].sort()).toEqual(
       [...VARIAVEIS_DA_CAMPANHA_NO_CATALOGO].sort(),
     );
