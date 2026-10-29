@@ -16,7 +16,7 @@ const linhas = Array.from({ length: TOTAL }, (_, i) => ({
   relida_em: new Date(Date.UTC(2026, 9, 10, 8, 0, 0) + i * 60_000).toISOString(),
   precisa_reler: false,
 }));
-const MAIOR = linhas[TOTAL - 1].relida_em;
+const MAIOR = linhas[TOTAL - 1]!.relida_em;
 
 describe("visão geral: última leitura além de 1.000 linhas", () => {
   it("1.001 linhas: mostra a leitura mais recente real, não a da fatia truncada", async () => {
