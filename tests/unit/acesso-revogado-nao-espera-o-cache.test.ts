@@ -283,7 +283,7 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
         if (!entrada.endsWith(".ts") || entrada.includes(".test.")) continue;
         const fonte = readFileSync(caminho, "utf8");
         const escreveVinculo = [...fonte.matchAll(/\.from\("user_organizations"\)/g)].some((m) =>
-          ESCRITA.test(fonte.slice(m.index + m[0].length).trimStart()),
+          ESCRITA.test(fonte.slice((m.index ?? 0) + m[0].length).trimStart()),
         );
         if (!escreveVinculo) continue;
         if (!fonte.includes("@/lib/auth/cache-curto")) {
