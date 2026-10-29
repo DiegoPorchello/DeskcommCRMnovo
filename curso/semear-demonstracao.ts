@@ -680,6 +680,12 @@ export async function semearBase(): Promise<Contexto> {
   );
   semErro(await db.from("conversations").delete().eq("organization_id", org), "limpar conversas");
   semErro(await db.from("crm_leads").delete().eq("organization_id", org), "limpar leads");
+  // `calendar_appointments.contact_id` é `on delete restrict`: as histórias do "em ação" deixam
+  // compromissos com cliente, e eles travariam a limpeza dos contatos de toda aula seguinte.
+  semErro(
+    await db.from("calendar_appointments").delete().eq("organization_id", org).not("contact_id", "is", null),
+    "limpar compromissos com cliente",
+  );
   semErro(await db.from("contacts").delete().eq("organization_id", org), "limpar contatos");
   semErro(
     await db.from("message_templates").delete().eq("organization_id", org),
