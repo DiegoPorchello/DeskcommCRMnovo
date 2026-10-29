@@ -91,3 +91,41 @@ describe("GET /api/v1/health — o endereço interno não sai para quem não tem
     expect(corpo).toContain(HOST_VAZADO);
   });
 });
+
+describe("GET /api/v1/health — indisponibilidade do projeto Supabase", () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("522 vira projeto_indisponivel, não tempo_esgotado", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 522 })));
+    const { GET } = await import("./route");
+    const { NextRequest } = await import("next/server");
+    const { data } = await (await GET(new NextRequest("https://crm.exemplo.com.br/api/v1/health"))).json();
+    expect(data.checks.supabase.status).toBe("down");
+    expect(data.checks.supabase.reason).toBe("projeto_indisponivel");
+  });
+
+  it("PGRST002 no corpo vira projeto_indisponivel", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ code: "PGRST002", message: "Could not query the database for the schema cache. Retrying." }), {
+          status: 503,
+        }),
+      ),
+    );
+    const { GET } = await import("./route");
+    const { NextRequest } = await import("next/server");
+    const { data } = await (await GET(new NextRequest("https://crm.exemplo.com.br/api/v1/health"))).json();
+    expect(data.checks.supabase.status).toBe("down");
+    expect(data.checks.supabase.reason).toBe("projeto_indisponivel");
+  });
+
+  it("timeout puro continua tempo_esgotado", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => {}));
+    const { GET } = await import("./route");
+    const { NextRequest } = await import("next/server");
+    const { data } = await (await GET(new NextRequest("https://crm.exemplo.com.br/api/v1/health"))).json();
+    expect(data.checks.supabase.status).toBe("down");
+    expect(data.checks.supabase.reason).toBe("tempo_esgotado");
+  });
+});

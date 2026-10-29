@@ -49,6 +49,7 @@ type MotivoDeFalha =
   | FalhaDeAlcance
   | "credencial_recusada"
   | "resposta_inesperada"
+  | "projeto_indisponivel"
   | "nao_configurado"
   | "configuracao_invalida";
 
@@ -186,11 +187,48 @@ async function checkSupabase(): Promise<Check> {
     if (res.status === 401 || res.status === 403) {
       return { status: "ok", latency_ms: Date.now() - t0, target: alvoDe(url) };
     }
+    // Lê o corpo UMA vez: ele é o que distingue "o projeto Supabase caiu" de
+    // "lentidão genérica". Sem abrir conexão nova nem retry: só classificar o que
+    // já veio na resposta. Projeto indisponível: HTTP 522 (Cloudflare não
+    // alcança a origem) ou corpo com PGRST002 / schema cache (PostgREST não
+    // conseguiu carregar o cache de schema, típico de compute insuficiente no
+    // free). Não confundir com PGRST205 (tabela ausente num projeto de pé).
+    let corpo = "";
+    try {
+      corpo = (await withTimeout(res.text())).trim();
+    } catch {
+      // corpo que nunca chega = serviço que não respondeu: propaga para o catch
+      // externo, que classifica como tempo_esgotado (comportamento anterior).
+      throw new Error("timeout after body");
+    }
+    const projetoIndisponivel =
+      res.status === 522 ||
+      /PGRST002/i.test(corpo) ||
+      (res.status >= 500 && /schema cache/i.test(corpo));
+    if (projetoIndisponivel) {
+      return {
+        status: "down",
+        latency_ms: Date.now() - t0,
+        error: "projeto_indisponivel (PGRST002/522/schema cache): reinicie o projeto no Supabase (Restart project) — ver docs/runbooks/supabase-compute-insuficiente-free.md",
+        reason: "projeto_indisponivel",
+        target: alvoDe(url),
+      };
+    }
     // 200 (lista vazia por RLS) → conexão OK, mas só se o que voltou FOR do
     // PostgREST. Um `200` com HTML no corpo é a tela de login respondendo no
     // lugar da API: antes do conserto, ele vinha com `status: ok`.
     if (res.status === 200) {
-      if (await respostaDoPostgrest(res)) {
+      if (!corpo) {
+        return { status: "ok", latency_ms: Date.now() - t0, target: alvoDe(url) };
+      }
+      let ehJson = false;
+      try {
+        JSON.parse(corpo);
+        ehJson = true;
+      } catch {
+        ehJson = false;
+      }
+      if (ehJson) {
         return { status: "ok", latency_ms: Date.now() - t0, target: alvoDe(url) };
       }
       return {
