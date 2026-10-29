@@ -129,7 +129,7 @@ export const VARIAVEIS_DO_CATALOGO: readonly VariavelDoCatalogo[] = [
   {
     nome: "contato.*",
     descricao: "Campo personalizado do CONTATO, escrito como `{{contato.<campo>}}`",
-    exemplo: "{{contato.link_previa}} → “https://loja.exemplo/previa/ana”",
+    exemplo: "{{contato.link_previa}} → “https://<a-loja-do-cliente>/previa/ana”",
     origem: {
       fonte: "contacts.custom_fields (jsonb) do contato",
       regra:
