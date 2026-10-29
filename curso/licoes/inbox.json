@@ -918,8 +918,9 @@
             },
             {
               "alvo": {
-                "texto": "Hoje",
-                "exato": true,
+                "texto": "^(Hoje|Ontem)$",
+                "regex": true,
+                "n": 0,
                 "dentro": {
                   "testid": "chat-thread"
                 }
