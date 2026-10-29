@@ -93,7 +93,8 @@ export async function semear(c: Contexto) {
         id: propostaId(1), organization_id: org, lead_id: await negocioDe(1), contact_id: contatoId(1),
         titulo: demo("Acompanhamento nutricional — 3 meses"), status: "rascunho",
         condicoes: demo("Pagamento em até 3x no cartão ou 5% de desconto no Pix."),
-        total_cents: 84_000, moeda: "BRL", valid_until: data(25, 15), pricing_status: "manual",
+        // versao explícita: num insert em lote, coluna ausente numa linha vai NULL (não o default)
+        total_cents: 84_000, moeda: "BRL", valid_until: data(25, 15), pricing_status: "manual", versao: 1,
         drafted_by_agent_id: c.agenteId, template_slug_sugerido: MODELO, created_at: ha(25),
       },
       {
