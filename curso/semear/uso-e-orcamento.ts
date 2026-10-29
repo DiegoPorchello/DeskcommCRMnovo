@@ -40,8 +40,9 @@ const PRECO = {
   "claude-haiku-4-5": { entrada: 1, saida: 5, cache: 0.1 },
 } as const;
 type Modelo = keyof typeof PRECO;
+// `entrada` já INCLUI o que veio do cache (a tela divide cache por entrada): só o resto paga o preço cheio
 const centavos = (m: Modelo, entrada: number, saida: number, cache: number) =>
-  Number(((entrada * PRECO[m].entrada + saida * PRECO[m].saida + cache * PRECO[m].cache) / 10_000).toFixed(4));
+  Number((((entrada - cache) * PRECO[m].entrada + saida * PRECO[m].saida + cache * PRECO[m].cache) / 10_000).toFixed(4));
 
 export async function limpar(c: Contexto) {
   const { db, org } = c;
@@ -74,7 +75,7 @@ export async function semear(c: Contexto) {
       jobs.push({ id: job, organization_id: c.org, kind: "watchdog", status: "done", attempts: 1, run_after: em, created_at: em });
 
       const v = (turno * 37) % 100;
-      const conversa = { entrada: 1_800 + v * 9, saida: 180 + ((turno * 13) % 200), cache: 4_200 + v * 14 };
+      const conversa = { entrada: 6_000 + v * 23, saida: 180 + ((turno * 13) % 200), cache: 4_200 + v * 14 };
       const partes: Array<{ purpose: string; modelo: Modelo; entrada: number; saida: number; cache: number; ms: number; doAgente?: true }> = [
         { purpose: "agent_turn", modelo: "claude-sonnet-4-6", ...conversa, ms: 2_600 + v * 26, doAgente: true },
         { purpose: "sentiment_classify", modelo: "claude-haiku-4-5", entrada: 520 + v * 2, saida: 18, cache: 0, ms: 420 + v * 4 },

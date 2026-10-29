@@ -55,7 +55,7 @@ const AVISOS: Aviso[] = [
   {
     n: 4, kind: "budget_warning", severity: "warn", em: ha(300),
     title: "O gasto de IA deste mês passou de 80% do limite",
-    body: "Já foram usados US$ 16,40 dos US$ 20,00 definidos para o mês. A IA continua respondendo normalmente.",
+    body: "Já foram usados US$ 12,10 dos US$ 15,00 definidos para o mês. A IA continua respondendo normalmente.",
   },
   {
     n: 5, kind: "snooze_expired", severity: "info", conversa: 12, em: ha(600),

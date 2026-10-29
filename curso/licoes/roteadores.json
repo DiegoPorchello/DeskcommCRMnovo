@@ -730,7 +730,7 @@
               }
             }
           ],
-          "texto": "Com as intenções prontas, clique na chave do bloco \"Identificação\". O texto muda para \"Ativo — está roteando as conversas deste número\", e a mudança vale depois de clicar em \"Salvar\". A partir daí, cada mensagem nova do número passa pelo roteador. Depois que ele entrega uma conversa a um agente, ela continua com esse agente; só muda se o cliente passar a falar de outro assunto cadastrado, com certeza suficiente. Para desligar, clique na chave de novo e salve: o número volta para o agente publicado nele.",
+          "texto": "Depois de cadastrar as intenções, clique na chave do bloco \"Identificação\". O texto muda para \"Ativo — está roteando as conversas deste número\", e a mudança vale depois de clicar em \"Salvar\". A partir daí, cada mensagem nova do número passa pelo roteador. Depois que ele entrega uma conversa a um agente, ela continua com esse agente; só muda se o cliente passar a falar de outro assunto cadastrado, com certeza suficiente. Para desligar, clique na chave de novo e salve: o número volta para o agente publicado nele.",
           "dica": "Se outro roteador já estiver ativo no mesmo número, o sistema recusa ao salvar, com o aviso \"Este número já tem um roteador ativo.\". Desligue o outro primeiro.",
           "destaques": [
             {

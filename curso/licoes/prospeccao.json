@@ -612,7 +612,7 @@
         {
           "id": "p2",
           "titulo": "A auditoria completa",
-          "texto": "Clique em \"Ver detalhes\" para abrir a \"Auditoria do site\" da empresa: os problemas encontrados, o que o site já tem, o que falta e uma sugestão de estratégia de abordagem, pensada para quem vende site ou automação. \"Reanalisar site\" abre o site de novo na hora. \"Prévia da abordagem\" pede à IA uma prévia nova, que fica guardada no lugar da anterior e consome crédito de IA. Para fechar, clique no X, no alto da janela, ou fora dela.",
+          "texto": "Clique em \"Ver detalhes\" para abrir a \"Auditoria do site\" da empresa: os problemas encontrados, o que o site já tem, o que falta e uma sugestão de estratégia de abordagem, pensada para quem vende site ou automação. \"Reanalisar site\" abre o site de novo na hora. \"Prévia da abordagem\" pede à IA uma prévia nova, que fica guardada no lugar da anterior e consome crédito de IA. Para fechar, aperte Esc ou clique fora da janela.",
           "antes": [
             {
               "acao": "click",

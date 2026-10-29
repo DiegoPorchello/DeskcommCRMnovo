@@ -56,7 +56,7 @@
           "id": "p2",
           "titulo": "Um cartão para cada funil",
           "rota": "/app/settings/tenant/pipelines",
-          "texto": "Um funil é o caminho que o cliente faz até fechar, dividido em etapas. Cada etapa vira uma coluna no quadro do funil. Esta tela mostra um cartão para cada funil ativo da empresa. A Clínica Bem Viver tem dois: \"Pacientes\", aqui no alto, e \"Pilates\", mais abaixo. Nas próximas lições você mexe no \"Pilates\", para não mudar o funil principal.",
+          "texto": "Um funil é o caminho que o cliente faz até fechar, dividido em etapas. Cada etapa vira uma coluna no quadro do funil. Esta tela mostra um cartão para cada funil ativo da empresa. A Clínica Bem Viver tem dois: \"Pacientes\", aqui no alto, e \"Pilates\", que aparece quando você rola a tela. Nas próximas lições você mexe no \"Pilates\", para não mudar o funil principal.",
           "dica": "Funil arquivado não aparece aqui. Para criar ou arquivar um funil inteiro, use a tela Funis, no menu CRM.",
           "antes": [],
           "destaques": [
@@ -734,7 +734,7 @@
         {
           "id": "p6",
           "titulo": "A etapa saiu do funil",
-          "texto": "\"Lista de espera\" sumiu da lista e do quadro, e os 2 negócios dela estão agora em \"Novo\", que passou a ter 4. A mudança fica registrada no histórico de cada negócio.",
+          "texto": "\"Lista de espera\" sumiu da lista e do quadro, e os 2 negócios dela foram para \"Novo\". A mudança fica registrada no histórico de cada negócio. A conta de negócios que aparece embaixo de cada etapa só se atualiza quando você recarrega a página.",
           "antes": [
             {
               "acao": "click",
@@ -754,13 +754,6 @@
               },
               "rotulo": "Recebeu os negócios",
               "tipo": "caixa"
-            },
-            {
-              "alvo": {
-                "testid": "tempo-etapa-d1110100-0000-4000-8000-000000000001"
-              },
-              "rotulo": "Agora são 4",
-              "tipo": "numero"
             }
           ]
         }
