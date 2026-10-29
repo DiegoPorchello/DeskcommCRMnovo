@@ -406,3 +406,38 @@ describe("#3008 — falha de gravação não mente para quem configurou", () => 
     expect(modulosNaTela()).toEqual(LATERAL_DE_HOJE);
   });
 });
+
+/**
+ * (g) DA PROVA PELA TELA: no celular a lateral mora num `Sheet`, e a faixa
+ * `sticky` da engrenagem cobria o X de fechar — `document.elementFromPoint` no
+ * centro do X devolvia a faixa, e o toque no X não fechava a gaveta.
+ *
+ * O jsdom não calcula empilhamento, então este caso mede a REGRA que decide o
+ * empilhamento: o X e a faixa são posicionados no mesmo contexto (o conteúdo
+ * do Sheet), o X vem ANTES no DOM, então só um `z-index` estritamente maior
+ * põe o X por cima. A medida em pixel (elementFromPoint) é a da prova (g).
+ */
+describe("#3008 — no celular, a faixa da engrenagem não cobre o X do Sheet", () => {
+  const zIndex = (el: Element) => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(el.className)?.[1] ?? 0);
+
+  it("o X de fechar fica acima da faixa sticky, montado como no InboxLayout", async () => {
+    const { Sheet, SheetContent, SheetTitle } = await import("@/components/ui/sheet");
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <Sheet open>
+          <SheetContent side="right" className="w-[min(22rem,90vw)] overflow-y-auto p-0">
+            <SheetTitle className="sr-only">Ficha do contato</SheetTitle>
+            <CRMSidePanel conversation={conversa} />
+          </SheetContent>
+        </Sheet>
+      </QueryClientProvider>,
+    );
+
+    const faixa = await screen.findByTestId("inbox-cabecalho-do-painel");
+    const fechar = screen.getByRole("button", { name: "Fechar" });
+
+    expect(zIndex(faixa)).toBeGreaterThan(0);
+    expect(zIndex(fechar)).toBeGreaterThan(zIndex(faixa));
+  });
+});
