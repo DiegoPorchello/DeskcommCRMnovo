@@ -114,6 +114,13 @@ export const DICIONARIO: Traducoes = {
   // `Sem atividade` é chave NOVA; `Funil não encontrado.`, que a rota usa no
   // 404, já existe no dicionário (bloco das rotas de fluxo) — não duplicar.
   "Sem atividade": { es: "Sin actividad" },
+  // Os filtros da barra na Lista (#3172, fatia 2): o que ainda não vale lá é
+  // DITO, não escondido. `{filtros}` é placeholder, preenchido com os nomes que
+  // a própria barra usa (já traduzidos).
+  "Na Lista, estes filtros ainda não valem: {filtros}. No Quadro eles funcionam.": {
+    es: "En la Lista, estos filtros todavía no se aplican: {filtros}. En el Tablero sí funcionan.",
+  },
+  "Nenhum negócio com este filtro.": { es: "Ningún negocio con este filtro." },
   "Há um ajuste proporcional esperando pagamento. Escolher outro plano cancela esse ajuste.": { es: "Hay un ajuste proporcional esperando el pago. Elegir otro plan cancela ese ajuste." },
   "Estamos preparando o ajuste proporcional. Aguarde alguns segundos e tente novamente.": { es: "Estamos preparando el ajuste proporcional. Espera unos segundos e inténtalo de nuevo." },
   "Estamos preparando o ajuste proporcional. Aguarde alguns segundos.": { es: "Estamos preparando el ajuste proporcional. Espera unos segundos." },
