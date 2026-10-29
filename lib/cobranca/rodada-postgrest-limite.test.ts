@@ -8,36 +8,46 @@ vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: 
 
 import { rodadaDaCobranca } from "./rodada";
 
-const TOTAL = 1001;
-const orgs = Array.from({ length: TOTAL }, (_, i) => `org-${i}`);
+/** Servidor falso com o teto de 1.000 linhas: só pagina quem pede ordem total. */
+async function rodar(total: number) {
+  const orgs = Array.from({ length: total }, (_, i) => `org-${String(i).padStart(5, "0")}`);
+  const leituras: Cadeia[] = [];
+  const responder = (c: Cadeia): Resposta => {
+    if (c.tabela === "cobranca_planos") return { data: [] };
+    if (c.tabela === "organizations") return { data: [] };
+    leituras.push(c);
+    const ordenada = c.passos.some((p) => p.metodo === "order" && p.args[0] === "organization_id");
+    // sem ordem, cada página sai numa ordem diferente: é o que o Postgres não promete manter
+    const base = ordenada || leituras.length % 2 === 1 ? orgs : [...orgs].reverse();
+    const range = c.passos.find((p) => p.metodo === "range")?.args as [number, number] | undefined;
+    const [from, to] = range ?? [0, total - 1];
+    const fatia = base.slice(from, to + 1).slice(0, 1000);
+    return { data: fatia.map((organization_id) => ({ organization_id })) };
+  };
+  const rpc = (nome: string): Resposta => (nome === "fn_cobranca_reconciliaveis" ? { data: [] } : { data: true });
+  await rodadaDaCobranca(bancoFalso(responder, rpc).cliente as never);
+  return { chamadas: h.aplicarRegua.mock.calls.map((c) => c[1] as string), leituras, orgs };
+}
 
-describe("rodada: régua alcança a 1.001ª organização", () => {
+describe("rodada: a régua passa por toda assinatura, mesmo além de 1.000", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.sincronizar.mockResolvedValue({ tipo: "aplicada", acao: "nada" });
     h.aplicarRegua.mockResolvedValue("nada");
   });
 
-  it("1.001 assinaturas: a última organização entra no passo da régua", async () => {
-    const responder = (c: Cadeia): Resposta => {
-      if (c.tabela === "cobranca_planos") return { data: [] };
-      if (c.tabela === "organizations") return { data: [] };
-      // distingue a query do teto (com in plano_id)
-      if (c.passos.some((p) => p.metodo === "in" && p.args[0] === "plano_id")) return { data: [] };
-      const range = c.passos.find((p) => p.metodo === "range")?.args as [number, number] | undefined;
-      const from = range?.[0] ?? 0;
-      const to = range?.[1] ?? (TOTAL - 1);
-      const pedaco = orgs.slice(from, to + 1).slice(0, 1000);
-      return { data: pedaco.map((organization_id) => ({ organization_id })) };
-    };
-    const rpc = (nome: string): Resposta => {
-      if (nome === "fn_cobranca_reconciliaveis") return { data: [] };
-      return { data: true };
-    };
-    const banco = bancoFalso(responder, rpc);
-    const resumo = await rodadaDaCobranca(banco.cliente as never);
-    const chamadas = h.aplicarRegua.mock.calls.map((c) => c[1]);
-    expect(chamadas).toContain(`org-${TOTAL - 1}`);
-    expect(chamadas).toHaveLength(TOTAL);
+  it.each([999, 1000, 1001, 2000])("%i assinaturas: cada organização uma vez, nenhuma de fora", async (total) => {
+    const r = await rodar(total);
+    expect(new Set(r.chamadas).size).toBe(total);
+    expect(r.chamadas).toHaveLength(total);
+    expect([...r.chamadas].sort()).toEqual(r.orgs);
+  });
+
+  it("toda página da lista pede ordem pela chave primária", async () => {
+    const r = await rodar(1001);
+    expect(r.leituras.length).toBeGreaterThan(1);
+    for (const c of r.leituras) {
+      expect(c.passos.some((p) => p.metodo === "order" && p.args[0] === "organization_id")).toBe(true);
+    }
   });
 });

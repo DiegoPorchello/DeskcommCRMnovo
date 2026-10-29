@@ -34,6 +34,8 @@ export interface ResumoDaRodada {
 
 export const LIMITE_DA_RECONCILIACAO = 50;
 const LIMIAR_DO_AVISO_DE_IA = 0.8;
+// Teto de linhas por resposta do PostgREST (max_rows) numa instalação padrão.
+const PAGE_SIZE = 1000;
 
 interface Reconciliavel {
   organization_id: string;
@@ -87,7 +89,6 @@ export async function rodadaDaCobranca(admin: SupabaseClient, deps: Dependencias
     }
   }
 
-  const PAGE_SIZE = 1000;
   const todas: Array<{ organization_id: string }> = [];
   let inicio = 0;
   for (let pagina = 0; pagina < 100; pagina++) {
@@ -95,6 +96,8 @@ export async function rodadaDaCobranca(admin: SupabaseClient, deps: Dependencias
       .from("cobranca_assinaturas")
       .select("organization_id")
       .not("organization_id", "is", null)
+      // range sem ordem total não é paginação: o Postgres não garante a mesma ordem entre duas leituras
+      .order("organization_id", { ascending: true })
       .range(inicio, inicio + PAGE_SIZE - 1);
     if (erroDoLote) throw new Error(`cobranca: assinaturas ilegíveis (${erroDoLote.code ?? "sem_codigo"})`);
     const linhasDoLote = (lote ?? []) as Array<{ organization_id: string }>;
@@ -132,13 +135,14 @@ async function avisarTetoDeIa(admin: SupabaseClient): Promise<number> {
       .from("cobranca_assinaturas")
       .select("organization_id, plano_id")
       .in("plano_id", [...tetoDoPlano.keys()])
-      .range(inicioTeto, inicioTeto + 1000 - 1);
+      .order("organization_id", { ascending: true })
+      .range(inicioTeto, inicioTeto + PAGE_SIZE - 1);
     if (erroDoLote) throw new Error(`cobranca: assinaturas com teto ilegíveis (${erroDoLote.code ?? "sem_codigo"})`);
     const linhasDoLote = (lote ?? []) as Array<{ organization_id: string; plano_id: string }>;
     if (linhasDoLote.length === 0) break;
     comTeto.push(...linhasDoLote);
     inicioTeto += linhasDoLote.length;
-    if (linhasDoLote.length < 1000) break;
+    if (linhasDoLote.length < PAGE_SIZE) break;
   }
   if (comTeto.length === 0) return 0;
 
