@@ -108,9 +108,14 @@ export function EditLeadDialog({ open, onOpenChange, lead, pipelineId }: Props) 
     // manda o formulário inteiro, e é isso que faz apagar o campo LIMPAR a
     // mensalidade (o `null` explícito é o "não tem mais"). A leitura é a régua
     // compartilhada com a criação e com o dossiê.
+    // Apagar a mensalidade de um negócio que a TINHA leva a duração junto: é a
+    // regra 1 do trio, a mesma do servidor (`recorrenciaParaGravar`). Duração
+    // digitada num negócio que nunca teve mensalidade segue sendo recusa.
+    const apagouAMensalidade =
+      lead.recurring_value_cents != null && values.valorRecorrenteReais.trim() === "";
     const leitura = lerRecorrenciaDoFormulario(
       values.valorRecorrenteReais,
-      values.recorrenciaMeses,
+      apagouAMensalidade ? "" : values.recorrenciaMeses,
       moedaDoValor,
     );
     if (!leitura.ok) {

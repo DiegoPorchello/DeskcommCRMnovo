@@ -141,9 +141,14 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
     // O RECORRENTE (fatia 1 da #3602) — a régua compartilhada com o diálogo de
     // criação e com o de edição; aqui também vai sempre, para apagar o campo
     // significar "não tem mais mensalidade".
+    // Apagar a mensalidade de um negócio que a TINHA leva a duração junto: é a
+    // regra 1 do trio, a mesma do servidor (`recorrenciaParaGravar`). Duração
+    // digitada num negócio que nunca teve mensalidade segue sendo recusa.
+    const apagouAMensalidade =
+      lead.recurring_value_cents != null && values.valorRecorrenteReais.trim() === "";
     const leitura = lerRecorrenciaDoFormulario(
       values.valorRecorrenteReais,
-      values.recorrenciaMeses,
+      apagouAMensalidade ? "" : values.recorrenciaMeses,
       moedaDoValor,
     );
     if (!leitura.ok) {

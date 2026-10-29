@@ -406,6 +406,8 @@ export function NewLeadDialog({
         description: "",
         stage_id: initialStage,
         valueReais: "",
+        valorRecorrenteReais: "",
+        recorrenciaMeses: "",
         tagsRaw: "",
         expected_close_date: "",
       });
