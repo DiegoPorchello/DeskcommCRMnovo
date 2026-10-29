@@ -508,8 +508,8 @@ test.describe("Contatos duplicados — juntar pela tela", () => {
     await page.getByRole("button", { name: /duplicados/i }).click();
     const dialogo = page.getByRole("dialog");
     await expect(dialogo.getByText("Parecidos — confira")).toBeVisible({ timeout: 20_000 });
-    await expect(dialogo.getByText(NOME_SORRISO_A, { exact: true })).toBeVisible();
-    await expect(dialogo.getByText(NOME_SORRISO_B, { exact: true })).toBeVisible();
+    await expect(dialogo.getByText(NOME_SORRISO_A, { exact: true }).first()).toBeVisible();
+    await expect(dialogo.getByText(NOME_SORRISO_B, { exact: true }).first()).toBeVisible();
 
     const cartao = dialogo
       .locator("div")
@@ -561,8 +561,8 @@ test.describe("Contatos duplicados — juntar pela tela", () => {
     await page.getByRole("button", { name: /duplicados/i }).click();
     const dialogo = page.getByRole("dialog");
     await expect(dialogo.getByText("Parecidos — confira")).toBeVisible({ timeout: 20_000 });
-    await expect(dialogo.getByText(NOME_SORRISO_A, { exact: true })).toBeVisible();
-    await expect(dialogo.getByText(NOME_SORRISO_B, { exact: true })).toBeVisible();
+    await expect(dialogo.getByText(NOME_SORRISO_A, { exact: true }).first()).toBeVisible();
+    await expect(dialogo.getByText(NOME_SORRISO_B, { exact: true }).first()).toBeVisible();
     await captura(page, "08-parecidos-confira");
     await page.keyboard.press("Escape");
 
@@ -585,8 +585,8 @@ test.describe("Contatos duplicados — juntar pela tela", () => {
     // Confirmação nomeada, e o vencedor é a ficha de onde o operador partiu.
     await dialogoDeJuntar.getByRole("button", { name: /^juntar$/i }).click();
     const confirmacao = page.getByRole("alertdialog");
-    await expect(confirmacao.getByText(NOME_SORRISO_A, { exact: false })).toBeVisible();
-    await expect(confirmacao.getByText(NOME_SORRISO_B, { exact: false })).toBeVisible();
+    await expect(confirmacao.getByText(NOME_SORRISO_A, { exact: false }).first()).toBeVisible();
+    await expect(confirmacao.getByText(NOME_SORRISO_B, { exact: false }).first()).toBeVisible();
     await expect(confirmacao.getByText(/n[ãa]o h[áa] como desfazer/i)).toBeVisible();
     const resposta = page.waitForResponse(
       (r) => r.url().includes("/api/v1/contacts/merge") && r.request().method() === "POST",
