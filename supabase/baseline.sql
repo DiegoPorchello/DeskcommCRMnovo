@@ -67882,3 +67882,32 @@ update public.agent_inbox_items as aviso
 create unique index if not exists inbox_task_reminder_ocasiao_unique
   on public.agent_inbox_items (organization_id, ref_id, kind, para_user_id, task_reminder_due_at)
   where ref_kind = 'task' and task_reminder_due_at is not null and status <> 'resolved';
+
+-- ---- pessoa física: endereço no contato (migration 9041, issue #3494) ----
+-- Espelho idempotente da 9041. Os mesmos campos de `companies`, agora em
+-- `contacts`, para entrega e cobrança.
+alter table public.contacts
+  add column if not exists zip_code text,
+  add column if not exists street text,
+  add column if not exists number text,
+  add column if not exists complement text,
+  add column if not exists district text,
+  add column if not exists city text,
+  add column if not exists state text;
+
+comment on column public.contacts.zip_code is
+  'CEP do endereço da pessoa física (issue #3494). NULL quando não informado.';
+comment on column public.contacts.street is
+  'Logradouro do endereço da pessoa física (issue #3494). NULL quando não informado.';
+comment on column public.contacts.number is
+  'Número do endereço da pessoa física (issue #3494). NULL quando não informado.';
+comment on column public.contacts.complement is
+  'Complemento do endereço da pessoa física (issue #3494). NULL quando não informado.';
+comment on column public.contacts.district is
+  'Bairro do endereço da pessoa física (issue #3494). NULL quando não informado.';
+comment on column public.contacts.city is
+  'Cidade do endereço da pessoa física (issue #3494). NULL quando não informado.';
+comment on column public.contacts.state is
+  'UF do endereço da pessoa física (issue #3494). NULL quando não informado.';
+
+notify pgrst, 'reload schema';
