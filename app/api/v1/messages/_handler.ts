@@ -642,6 +642,28 @@ export async function sendMessageHandler(
   // (`automation`/`system`) ficam de fora, como o relato pede. Humano ganha o
   // nome do atendente com iniciais em maiúsculo; a IA, o nome configurável.
   const origemDoEmissor = origemDaMensagem(ctx.actor);
+  // O id do agente NÃO é o `id` do ator em todo caminho (#3373). O motor do
+  // turno põe o agente no `id` (`lib/agent-engine/edge/crm/send-message.ts`),
+  // mas a Prospecção põe o CANDIDATO no `id` e o agente em `agent_id`
+  // (`lib/prospecting/worker.ts`), e a ação "Mensagem escrita pela IA" dispara
+  // com um ator da regra cujo `id` é a própria regra
+  // (`lib/automation/actions/send-ai-message.ts`). A coluna certa é
+  // `agent_id`; `?? id` é só a ponte do caminho do motor, que ainda não manda
+  // `agent_id`.
+  const idDoAgente =
+    ctx.actor.type === "ai_agent"
+      ? (ctx.actor.agent_id ?? ctx.actor.id)
+      : ctx.actor.type === "webhook_source"
+        ? (ctx.actor.agent_id ?? null)
+        : null;
+  // O nome do agente que enviou é lido UMA vez e serve a dois consumidores: a
+  // assinatura por agente (#3310) e o balão, que mostra "IA · <nome>" a partir
+  // de `metadata.ai_actor_name` gravado na linha, porque ele não faz join
+  // (#3649).
+  const nomeDoAgente =
+    origemDoEmissor === "ai" && idDoAgente !== null
+      ? await nomeDoAgenteDeIA(supabase, ctx.organization_id, idDoAgente)
+      : null;
   let assinatura: string | null = null;
   if (origemDoEmissor === "user" || origemDoEmissor === "ai") {
     const { data: orgAssinatura } = await supabase
@@ -661,29 +683,13 @@ export async function sendMessageHandler(
       // #3310: com `por_agente` ligado, a IA assina com o nome do AGENTE QUE
       // ENVIOU (`ai_agents.name`) — com dois agentes no mesmo número, o cliente
       // lia o nome de um e a conversa seguia com outro. `nome_ia` fica como
-      // reserva (mensagem sem agente, leitura que falhou). Desligado, nem lê.
-      //
-      // #3373: o id do agente NÃO é o `id` do ator em todo caminho. O motor do
-      // turno põe o agente no `id` (`lib/agent-engine/edge/crm/send-message.ts`),
-      // mas a Prospecção põe o CANDIDATO no `id` e o agente em `agent_id`
-      // (`lib/prospecting/worker.ts`), e a ação "Mensagem escrita pela IA"
-      // dispara com um ator da regra cujo `id` é a própria regra
-      // (`lib/automation/actions/send-ai-message.ts`). Ler o `id` em todos eles
-      // assinava com o `nome_ia` — no primeiro caminho o id até casava com um
-      // `ai_agents.id` por acaso, mas não era a coluna que diz quem enviou. A
-      // coluna certa é `agent_id`; `?? id` é só a ponte do caminho do motor,
-      // que ainda não manda `agent_id`.
-      const idDoAgente =
-        ctx.actor.type === "ai_agent"
-          ? (ctx.actor.agent_id ?? ctx.actor.id)
-          : ctx.actor.type === "webhook_source"
-            ? (ctx.actor.agent_id ?? null)
-            : null;
-      const nomeDoAgente =
-        origemDoEmissor === "ai" && configAss.porAgente && idDoAgente !== null
-          ? await nomeDoAgenteDeIA(supabase, ctx.organization_id, idDoAgente)
-          : null;
-      assinatura = linhaDeAssinatura(configAss, origemDoEmissor, nomeDoAtendente, nomeDoAgente);
+      // reserva (mensagem sem agente, leitura que falhou).
+      assinatura = linhaDeAssinatura(
+        configAss,
+        origemDoEmissor,
+        nomeDoAtendente,
+        configAss.porAgente ? nomeDoAgente : null,
+      );
     }
   }
 
@@ -850,22 +856,6 @@ export async function sendMessageHandler(
     );
   }
 
-  // #3649: o nome do agente viaja GRAVADO na linha (metadata.ai_actor_name),
-  // porque o balão não faz join. Resolvemos na origem — `ai_actor_id` não é
-  // confiável para isso (run id no finalize, id do agente no handler).
-  const idDoAgenteParaBalao =
-    origemDoEmissor === "ai"
-      ? ctx.actor.type === "ai_agent"
-        ? (ctx.actor.agent_id ?? ctx.actor.id)
-        : ctx.actor.type === "webhook_source"
-          ? (ctx.actor.agent_id ?? null)
-          : null
-      : null;
-  const nomeDoAgenteParaBalao =
-    idDoAgenteParaBalao !== null
-      ? await nomeDoAgenteDeIA(supabase, ctx.organization_id, idDoAgenteParaBalao)
-      : null;
-
   const insertRow = {
     ...(ctx.internalMessageId ? { id: ctx.internalMessageId } : {}),
     organization_id: c.organization_id,
@@ -892,7 +882,7 @@ export async function sendMessageHandler(
     metadata: {
       ...(input.metadata ?? {}),
       ...(ctx.actor.type === "ai_agent" ? { ai_actor_id: ctx.actor.id } : {}),
-      ...(origemDoEmissor === "ai" ? { ai_actor_name: nomeDoAgenteParaBalao } : {}),
+      ...(origemDoEmissor === "ai" ? { ai_actor_name: nomeDoAgente } : {}),
       // Os dois nomes viajam GRAVADOS porque o balão não faz join: "Fulano ·
       // via {token}" é desenhado da própria linha. Vêm DEPOIS de
       // `input.metadata` de propósito — metadata é entrada do cliente, e
