@@ -51,6 +51,14 @@ export interface OpcoesDoDubleDoHandler {
   /** Linhas de `calendar_appointments` lidas pela guarda de agenda. Padrão: `[]`. */
   agenda?: LinhaDoDuble[];
   /**
+   * O roteamento por número do #3642: `channel_routing_policies` (uma por número
+   * que tem dono) e os donos em `channel_routing_responsibles` (`policy_id`,
+   * `user_id`). Padrão VAZIO = instalação sem um número por vendedor, em que a
+   * guarda do envio não restringe ninguém — o comportamento de antes.
+   */
+  politicasDeNumero?: LinhaDoDuble[];
+  responsaveisDeNumero?: LinhaDoDuble[];
+  /**
    * A linha de `ai_agents` que a conferência da operação do agente lê pela REST
    * (`assertAgentOperationSupabase`). Função = estado vivo: o teste pausa o
    * agente entre uma bolha e outra.
@@ -509,6 +517,43 @@ export function criarDubleDoHandler(
             return cadeia;
           },
         };
+      }
+
+      if (
+        tabela === "channel_routing_policies" ||
+        tabela === "channel_routing_responsibles"
+      ) {
+        // As duas tabelas que dizem "de quem é este número" (#3642). Vazias por
+        // padrão: sem policy, a organização não separa números por vendedor e a
+        // guarda do envio libera. Uma linha de policy + os responsáveis ligam a
+        // regra no teste que a prova.
+        const linhas =
+          tabela === "channel_routing_policies"
+            ? opcoes.politicasDeNumero ?? []
+            : opcoes.responsaveisDeNumero ?? [];
+        const filtros: Array<[string, unknown]> = [];
+        const cadeia = {
+          select: () => cadeia,
+          eq: (coluna: string, valor: unknown) => {
+            filtros.push([coluna, valor]);
+            return cadeia;
+          },
+          maybeSingle: async () => ({
+            data: linhas.find((l) => filtros.every(([c, v]) => l[c] === v)) ?? null,
+            error: null,
+          }),
+          // A segunda e a terceira leitura do quadro são AGUARDADAS direto
+          // (`await db.from(...).select(...).eq(...).eq(...)`) e esperam um array,
+          // como o PostgREST. Uma cadeia que não é aguardável devolveria o próprio
+          // objeto, `data` viria `undefined`, e a guarda cairia no caminho "sem
+          // regra" — o teste ficaria verde sem exercitar nada.
+          then: (ok: (v: unknown) => unknown, erro?: (e: unknown) => unknown) =>
+            Promise.resolve({
+              data: linhas.filter((l) => filtros.every(([c, v]) => l[c] === v)),
+              error: null,
+            }).then(ok, erro),
+        };
+        return cadeia;
       }
 
       throw new Error(`duble-do-handler: tabela inesperada '${tabela}'`);

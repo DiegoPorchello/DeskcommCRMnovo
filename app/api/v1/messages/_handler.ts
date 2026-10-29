@@ -54,6 +54,11 @@ import {
 } from "@/lib/messaging/contact-card";
 import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
+import {
+  MENSAGEM_DO_NUMERO,
+  quadroDoNumero,
+  vereditoDoNumero,
+} from "@/lib/channels/numero-do-atendente";
 import { emitirFalhaDeEntrega } from "@/lib/messaging/falha-de-entrega";
 import { previaDaMensagem } from "@/lib/messaging/previa-da-mensagem";
 import { aplicarAssinatura, configAssinatura, linhaDeAssinatura } from "@/lib/messaging/assinatura";
@@ -553,6 +558,56 @@ export async function sendMessageHandler(
       ctx.requestId,
       traduzir("Contato marcado como pessoal.", ctx.idioma ?? "pt-BR"),
     );
+  }
+
+  // ─── De quem é o número desta conversa (#3642) ─────────────────────────────
+  //
+  // O envio sai pela sessão da CONVERSA (`c.channel_session_id`), e essa sessão é
+  // o telefone de uma PESSOA. Numa instalação com um número por vendedor, quem
+  // não responde por esse número não fala por ele: depois de uma transferência
+  // (ou de uma troca de carteira), o vendedor novo respondia pelo WhatsApp do
+  // colega — a mensagem saía pelo número do antigo e a resposta do cliente ia
+  // para o celular dele.
+  //
+  // A troca de dono já leva o número junto (`fn_conversation_assign`, migration
+  // 9032). O que sobra para esta guarda é o caso sem número para levar: o dono
+  // novo não tem conexão própria e a conversa ficou no número de outra pessoa.
+  // Aí o envio recusa ALTO — nunca sai pelo número do colega. Organização sem um
+  // número por vendedor não muda nada aqui (é o controle da regra).
+  //
+  // Só ator HUMANO: token de integração e IA não são "a pessoa do número" — o
+  // defeito é de quem digita no Inbox, e restringir a regra a ele deixa os
+  // caminhos automáticos exatamente como estavam.
+  if (ctx.actor.type === "user") {
+    const numero = await quadroDoNumero(supabase, {
+      organizationId: ctx.organization_id,
+      channelSessionId: c.channel_session_id ?? null,
+      userId: ctx.actor.id,
+    });
+    if (numero.leitura === "indisponivel") {
+      // Falha FECHADA: um erro transitório não pode reabrir o vazamento em
+      // silêncio, e nada foi enviado.
+      throw new ApiError(
+        503,
+        "numero_do_atendente_indisponivel",
+        undefined,
+        ctx.requestId,
+        traduzir(
+          "Não foi possível conferir o número desta conversa. Nada foi enviado.",
+          ctx.idioma ?? "pt-BR",
+        ),
+      );
+    }
+    const veredito = vereditoDoNumero(numero.quadro);
+    if (!veredito.ok) {
+      throw new ApiError(
+        409,
+        veredito.codigo,
+        { channel_session_id: c.channel_session_id },
+        ctx.requestId,
+        traduzir(MENSAGEM_DO_NUMERO[veredito.codigo], ctx.idioma ?? "pt-BR"),
+      );
+    }
   }
 
   // ─── A janela de 24h, ANTES de qualquer linha nascer (#1614) ──────────────

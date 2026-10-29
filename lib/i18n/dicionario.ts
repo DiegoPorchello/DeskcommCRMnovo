@@ -41,6 +41,17 @@ type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>
 
 export const DICIONARIO: Traducoes = {
   "Mensagens da conversa": { es: "Mensajes de la conversación" },
+  // Número do atendente no envio (#3642) — a recusa de quem tenta responder por
+  // um número que não é o dele, e a da leitura que não pôde ser feita.
+  "Você não tem um número de WhatsApp conectado. Esta conversa está no número de outro atendente e não pode ser respondida por ele — peça a quem administra a Central de Conexões para conectar o seu.": {
+    es: "No tienes un número de WhatsApp conectado. Esta conversación está en el número de otro atendente y no se puede responder por él: pídele a quien administra la Central de Conexiones que conecte el tuyo.",
+  },
+  "Esta conversa está no número de outro atendente. Transfira a conversa para você para responder por aqui.": {
+    es: "Esta conversación está en el número de otro atendente. Transfiere la conversación a tu nombre para responder por aquí.",
+  },
+  "Não foi possível conferir o número desta conversa. Nada foi enviado.": {
+    es: "No fue posible verificar el número de esta conversación. No se envió nada.",
+  },
   "Novas mensagens · Ir para o fim": { es: "Mensajes nuevos · Ir al final" },
   // Encaminhar mensagem (#2835) — botão na bolha do chat e o diálogo de destino.
   "Encaminhar": { es: "Reenviar" },

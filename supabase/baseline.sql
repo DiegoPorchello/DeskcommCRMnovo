@@ -50637,6 +50637,8 @@ declare
   v_dono_papel text;
   v_contato_org uuid;
   v_origem text := coalesce(p_origem, 'manual');
+  v_anterior uuid;
+  v_conversa uuid;
 begin
   if v_ator is null then
     raise exception 'carteira_sem_ator' using errcode = '42501';
@@ -50661,7 +50663,7 @@ begin
             detail = 'Só manager e admin definem a carteira do cliente.';
   end if;
 
-  select c.organization_id into v_contato_org
+  select c.organization_id, c.carteira_user_id into v_contato_org, v_anterior
     from public.contacts c
    where c.id = p_contact;
   if v_contato_org is null then
@@ -50707,6 +50709,26 @@ begin
        and status = 'open'
        and owner_user_id is null
        and owner_agent_id is null;
+
+    -- ─── #3642: a carteira leva as conversas abertas ─────────────────────────
+    -- Só as que estavam com o dono ANTERIOR da carteira (ou sem dono): conversa
+    -- que já é de outra pessoa não é roubada por uma troca de carteira. Passa
+    -- pela MESMA porta da transferência, então a conversa, o evento na linha do
+    -- tempo e o número do vendedor andam juntos — e `reason` fica no vocabulário
+    -- fechado da tabela de eventos ('transfer').
+    if p_dono is distinct from v_anterior then
+      for v_conversa in
+        select c.id
+          from public.conversations c
+         where c.organization_id = p_org
+           and c.contact_id = p_contact
+           and c.status in ('open', 'pending', 'claimed', 'ai_handling')
+           and (c.assigned_to_user_id is null or c.assigned_to_user_id = v_anterior)
+         order by c.id
+      loop
+        perform public.fn_conversation_assign(p_org, v_conversa, p_dono, 'transfer');
+      end loop;
+    end if;
   end if;
 
   return p_dono;
@@ -61872,6 +61894,8 @@ AS $function$
 declare
   v_from uuid;
   v_conv public.conversations%rowtype;
+  v_numero uuid;
+  v_trocou_de_numero boolean := false;
 begin
   if not public.fn_support_write_allowed(p_organization_id) then raise exception 'support_readonly' using errcode='42501'; end if;
   if auth.uid() is not null
@@ -61902,7 +61926,7 @@ begin
   -- chamador, então conversa de colega (o caso que a 0685 protege), a
   -- transferência para terceiro e o release continuam respondendo zero linhas
   -- exatamente como antes.
-  select assigned_to_user_id into v_from
+  select * into v_conv
     from public.conversations
    where id = p_conversation_id
      and organization_id = p_organization_id
@@ -61918,8 +61942,66 @@ begin
     return;
   end if;
 
+  v_from := v_conv.assigned_to_user_id;
+
   if p_enforce_expected and v_from is distinct from p_expected_assignee then
     return;
+  end if;
+
+  -- ─── #3642: o número segue o vendedor ──────────────────────────────────────
+  -- Numa empresa com um número por vendedor (`channel_routing_policies` +
+  -- `channel_routing_responsibles`), a troca de dono mudava só o dono: a
+  -- conversa continuava no `channel_session_id` do vendedor ANTERIOR e o envio
+  -- (que sai pela sessão da conversa) fazia o vendedor novo responder pelo
+  -- WhatsApp do colega. Aqui a conversa passa para o número conectado do dono
+  -- novo, na MESMA transação — e como esta é a porta única da atribuição, a
+  -- regra vale para Transferir (um e em lote), Assumir, MCP, automação e a
+  -- passagem de carteira sem nenhum deles precisar conhecê-la.
+  --
+  -- A ordem do `order by` é a regra: se o novo dono JÁ responde pelo número da
+  -- conversa (número compartilhado, ou reatribuição ao mesmo dono), ele fica;
+  -- senão, o primeiro número conectado dele, em ordem estável para dois números
+  -- do mesmo dono não escolherem um número diferente a cada chamada.
+  --
+  -- Dono sem número conectado e organização sem roteamento por vendedor não
+  -- mudam nada: a transferência nunca falha por causa do número. Quem recusa,
+  -- com erro claro, é o envio humano (`lib/channels/numero-do-atendente.ts`) —
+  -- nunca pelo número do colega.
+  if p_to_user_id is not null then
+    select cs.id into v_numero
+      from public.channel_routing_responsibles r
+      join public.channel_routing_policies p
+        on p.organization_id = r.organization_id and p.id = r.policy_id
+      join public.channel_sessions cs
+        on cs.organization_id = p.organization_id and cs.id = p.channel_session_id
+     where r.organization_id = p_organization_id
+       and r.user_id = p_to_user_id
+       and cs.archived_at is null
+       and cs.status = 'WORKING'
+       and coalesce(cs.metadata ->> 'disabled', 'false') <> 'true'
+     order by (cs.id = v_conv.channel_session_id) desc, cs.created_at, cs.id
+     limit 1;
+
+    -- Colisão: o contato JÁ tem conversa nesse número
+    -- (`uniq_conversations_1to1_per_contact_session`, 0027 — um contato por
+    -- conversa e por sessão, inclusive fechada). Re-apontar estouraria a
+    -- transação inteira e a transferência falharia; então o dono muda e o número
+    -- não — quem responde pelo número novo é a conversa que já está lá.
+    if v_numero is not null and v_numero is distinct from v_conv.channel_session_id then
+      perform 1
+        from public.conversations c
+       where c.organization_id = p_organization_id
+         and c.contact_id = v_conv.contact_id
+         and c.channel_session_id = v_numero
+         and c.is_group = false
+         and c.id <> p_conversation_id;
+      if found then
+        v_numero := null;
+      end if;
+    end if;
+
+    v_trocou_de_numero := v_numero is not null
+                          and v_numero is distinct from v_conv.channel_session_id;
   end if;
 
   update public.conversations
@@ -61946,6 +62028,12 @@ begin
                                                  else bot_silenced_until end)
            else 'infinity'::timestamptz
          end,
+         -- #3642: o número acompanha o dono, e a thread do provider ANTERIOR não
+         -- viaja — ela pertence ao número antigo.
+         channel_session_id = case when v_trocou_de_numero then v_numero
+                                   else channel_session_id end,
+         provider_conversation_id = case when v_trocou_de_numero then null
+                                         else provider_conversation_id end,
          updated_at = now()
    where id = p_conversation_id
    returning * into v_conv;
