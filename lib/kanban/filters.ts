@@ -220,7 +220,7 @@ export function applyFilters(
     if (!passaMarcador(l)) return false;
     if (
       search &&
-      !`${l.title} ${l.description ?? ""}`.toLowerCase().includes(search)
+      !`${l.title} ${l.description ?? ""} ${l.contact_phone ?? ""} ${(l.contact_phones ?? []).join(" ")}`.toLowerCase().includes(search)
     )
       return false;
     // O LIMITE DE VALOR SÓ SE COMPARA COM A MOEDA EM QUE FOI ESCRITO (#1531).

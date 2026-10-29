@@ -137,15 +137,51 @@ export async function GET(
     }
   })();
   const anuncios = await anunciosDoContato(supabase, contactId, contactScope);
-  const [leads, orders, activities, demandas, fatos, historico] = await Promise.all([
-    supabase
+  // ─── Fatia 2a da #3669: número adicional também mostra o negócio ──────────
+  // O contato desta conversa pode ser um número ADICIONAL do cliente (um
+  // `crm_lead_links` com `target_kind='contact'`, `link_kind='related'`). Nesse
+  // caso o negócio tem `contact_id` do contato PRINCIPAL, e a leitura por
+  // `contact_id` devolveria vazio. Consultamos os vínculos antes e, se o
+  // contato não tiver negócio próprio (a precedência da 1a: próprio vence),
+  // trazemos os negócios em que ele aparece como relacionado.
+  const { data: vinculosRelacionados } = await supabase
+    .from("crm_lead_links")
+    .select("lead_id")
+    .eq("organization_id", contactScope.organization_id)
+    .eq("target_kind", "contact")
+    .eq("link_kind", "related")
+    .eq("target_id", contactId);
+  const idsRelacionados = (vinculosRelacionados ?? [])
+    .map((v: { lead_id?: string }) => v.lead_id)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+
+  // Próprio primeiro: se o contato tem negócio próprio, ele vence o relacionado
+  // (mesma regra de `lib/leads/active-lead.ts`, não se reescreve aqui).
+  const { data: leadsProprios, error: leadsPropriosErr } = await supabase
+    .from("crm_leads")
+    .select(LEAD_COLS)
+    .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
+    .eq("crm_pipelines.is_archived", false)
+    .order("updated_at", { ascending: false })
+    .limit(3);
+  if (leadsPropriosErr) {
+    // mantém o mesmo caminho de erro da rota (sobe a falha)
+  }
+
+  let leadsResolvidos = leadsProprios ?? [];
+  if (leadsResolvidos.length === 0 && idsRelacionados.length > 0) {
+    const { data: leadsRel } = await supabase
       .from("crm_leads")
       .select(LEAD_COLS)
-      .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
-      // Arquivar o funil não fecha os leads; sem isto eles seguiam aqui como abertos.
+      .eq("organization_id", contactScope.organization_id)
       .eq("crm_pipelines.is_archived", false)
+      .in("id", idsRelacionados)
       .order("updated_at", { ascending: false })
-      .limit(3),
+      .limit(3);
+    leadsResolvidos = leadsRel ?? [];
+  }
+
+  const [orders, activities, demandas, fatos, historico] = await Promise.all([
     supabase
       .from("orders")
       .select(ORDER_COLS)
@@ -180,7 +216,7 @@ export async function GET(
 
   // A falha SOBE. Engolir aqui devolveria lista vazia ao cliente e recriaria,
   // do lado do servidor, exatamente a mentira que esta rota veio desfazer.
-  const falha = leads.error ?? orders.error ?? activities.error ?? demandas.error ?? fatos.error ?? historico.error;
+  const falha = (leadsPropriosErr ?? null) ?? orders.error ?? activities.error ?? demandas.error ?? fatos.error ?? historico.error;
   if (falha) {
     return fail("internal_error", falha.message, 500, { requestId });
   }
@@ -197,7 +233,7 @@ export async function GET(
   return ok(
     {
       ...enrichment,
-      leads: (leads.data ?? []).map((row) => comCamposDoFunil(row as Record<string, unknown>)),
+      leads: (leadsResolvidos ?? []).map((row) => comCamposDoFunil(row as Record<string, unknown>)),
       orders: orders.data ?? [],
       activities: linhas.map((a) => ({
         ...a,
