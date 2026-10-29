@@ -1,26 +1,21 @@
 import type pg from "pg";
 import { senderRoutesSchema, telefoneDoRemetente } from "@/lib/ai/agents/sender-routes";
-import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
-import { chatIdFromWaMessageId } from "@/lib/waha/message-id";
+import { telefoneDoChatDaMensagem } from "@/lib/channels/telefone-da-mensagem";
 import type { LoadedRouter } from "./router-config";
 
 /**
- * O telefone do chat que o WAHA gravou na entrada, ou `null`.
+ * O telefone do chat que o canal gravou na entrada, ou `null`.
  *
- * O id da mensagem recebida é composto pelo próprio canal
- * (`{fromMe}_{chatId}_{id}`) e é ele que diz de qual chat a mensagem veio.
- * `contacts.phone_number` não serve: é campo da ficha, editável por quem atende
- * e preenchível por proposta de dado, e a regra por remetente escolhe agente
- * com ferramentas que o atendimento público não tem.
+ * Quem lê o id da mensagem recebida é `lib/channels/` — é ele que diz de qual
+ * chat a mensagem veio. `contacts.phone_number` não serve: é campo da ficha,
+ * editável por quem atende e preenchível por proposta de dado, e a regra por
+ * remetente escolhe agente com ferramentas que o atendimento público não tem.
  *
- * Só chat de número (`@c.us`/`@s.whatsapp.net`). `@lid` não carrega telefone e
- * cai no agente público — falha fechada. A forma canônica (nono dígito) é a
- * mesma que a ingestão grava na ficha.
+ * Chat sem telefone (`@lid`) devolve `null` e cai no agente público — falha
+ * fechada.
  */
 export function telefoneDoCanal(externalId: string | null | undefined): string | null {
-  const chat = externalId ? chatIdFromWaMessageId(externalId) : null;
-  if (!chat || !/^\d+@(c\.us|s\.whatsapp\.net)$/.test(chat)) return null;
-  return telefoneDoRemetente(canonicalPhoneBR(`+${chat.slice(0, chat.indexOf("@"))}`));
+  return telefoneDoRemetente(telefoneDoChatDaMensagem(externalId));
 }
 
 /** Identidade gravada pelo canal na entrada, nunca a ficha nem o texto/prompt. */
