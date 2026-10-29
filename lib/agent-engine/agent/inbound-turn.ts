@@ -6169,7 +6169,7 @@ async function executarTurnoDoAgente(
       kind: liveJob().kind,
       messages_sent: outcomes.length,
       model: turn.model,
-      processamento_ms: Math.round(performance.now() - inicioDoProcessamento),
+      duracao_do_turno_ms: Math.round(performance.now() - inicioDoProcessamento),
       classificadores_ms: duracaoDosClassificadoresMs,
     });
   } finally {
