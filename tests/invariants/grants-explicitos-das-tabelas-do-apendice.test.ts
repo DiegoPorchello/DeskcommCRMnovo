@@ -164,6 +164,7 @@ function semComentario(texto: string): string {
 
 /** O apêndice inteiro: do primeiro bloco de complemento (`-- ---- `) ao fim do arquivo. */
 function apendiceDoBaseline(): string {
+  // sonda-do-baseline: primeira-de-proposito — a fronteira dump/apêndice É a primeira marca; mede ordem de arquivo, não definição.
   const de = SQL_DO_BASELINE.search(/^-- ---- /m);
   if (de === -1)
     throw new Error("apêndice do baseline não encontrado ('-- ---- ' abrindo o complemento).");
