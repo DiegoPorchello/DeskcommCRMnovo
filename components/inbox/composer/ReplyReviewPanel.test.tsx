@@ -23,6 +23,7 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 import { ReplyReviewPanel } from "./ReplyReviewPanel";
 
 const GENERICA = "Confira a configuração do agente e tente gerar novamente.";
+const REESCRITA = /A primeira versão desta resposta foi barrada/;
 
 const draft = (extra: Record<string, unknown> = {}) => ({
   id: "d1",
@@ -118,10 +119,64 @@ describe("o painel diz QUAL veto barrou a sugestão (issue #2975)", () => {
     },
   );
 
-  it("CONTROLE: rascunho que não falhou não mostra causa nenhuma", async () => {
+  /**
+   * Este caso provava o SILÊNCIO: "pendente" com código gravado não mostrava
+   * causa nenhuma. Mudou de propósito (doc de decisão 234, opção A): pendente
+   * COM texto e COM código é a reescrita que o agente fez depois de uma barrada
+   * na mesma rodada, e quem atende passa a saber disso e do motivo.
+   */
+  it("pendente com texto e código conta que a primeira versão foi barrada, e por quê", async () => {
     montar([draft({ status: "pending", original_body: "Oi", error_code: "messaging_window_closed" })]);
 
     expect(await screen.findByText("Sugestão para revisar")).toBeTruthy();
-    expect(screen.queryByText(/janela de 24 horas/)).toBeNull();
+    const aviso = screen.getByText(REESCRITA);
+    expect(aviso.textContent).toMatch(/janela de 24 horas/);
+    expect(screen.queryByText(GENERICA)).toBeNull();
+  });
+});
+
+describe("a reescrita depois de uma barrada aparece no painel (doc 234, issue #2975)", () => {
+  it("⭐ afirmação sem apoio barrada e reescrita: o aviso traz o motivo da família certa", async () => {
+    montar([
+      draft({
+        status: "pending",
+        original_body: "Temos o plano anual com desconto.",
+        error_code: "factual_claim_unsupported",
+      }),
+    ]);
+
+    const aviso = await screen.findByText(REESCRITA);
+    expect(aviso.textContent).toMatch(/sem apoio no material de referência/);
+    expect(aviso.textContent).not.toMatch(/CONTRADIZ/);
+    // A sugestão continua oferecida: o aviso informa, não tira o botão.
+    expect(screen.getByRole("button", { name: "Aprovar e enviar" })).toBeTruthy();
+  });
+
+  it("CONTROLE: pendente sem código não mostra aviso nenhum", async () => {
+    montar([draft({ status: "pending", original_body: "Oi", error_code: null })]);
+
+    expect(await screen.findByText("Sugestão para revisar")).toBeTruthy();
+    expect(screen.queryByText(REESCRITA)).toBeNull();
+  });
+
+  it("CONTROLE: pendente só com proposta (decidiu não responder) não fala em reescrita", async () => {
+    montar([
+      draft({
+        status: "pending",
+        original_body: "",
+        error_code: "no_candidate",
+        proposals: [{ tool: "crm_request_human_handoff", arguments: {} }],
+      }),
+    ]);
+
+    expect(await screen.findByText("Sugestão para revisar")).toBeTruthy();
+    expect(screen.queryByText(REESCRITA)).toBeNull();
+  });
+
+  it("CONTROLE: código desconhecido em pendente não inventa motivo", async () => {
+    montar([draft({ status: "pending", original_body: "Oi", error_code: "veto_novo_sem_par" })]);
+
+    expect(await screen.findByText("Sugestão para revisar")).toBeTruthy();
+    expect(screen.queryByText(REESCRITA)).toBeNull();
   });
 });

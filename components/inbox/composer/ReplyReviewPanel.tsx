@@ -35,6 +35,12 @@ export function ReplyReviewPanel({
   // A causa do veto, em linguagem de quem opera (issue #2975): sem código
   // conhecido, a frase genérica de sempre continua sendo a verdade.
   const motivo = draft ? motivoDoVeto(draft.error_code) : null;
+  // Pendente COM texto e COM código é a reescrita (doc de decisão 234): a
+  // prévia barrou a primeira versão e o agente escreveu outra na mesma rodada.
+  // Os códigos de parada (`no_candidate`, truncamento, teto) só nascem SEM
+  // candidato (`desfechoSemCandidato`), então texto gerado aqui exclui os dois.
+  const reescritaDepoisDeBarrada =
+    draft?.status === "pending" && !!motivo && !!draft.original_body?.trim();
   async function generate() {
     setNotice(null);
     setBusy(true);
@@ -120,6 +126,12 @@ export function ReplyReviewPanel({
               "Aprovar envia somente este texto. Não altera dados, agenda ou a autonomia do agente.",
             )}
           </p>
+          {reescritaDepoisDeBarrada && motivo && (
+            <p className="text-xs text-muted-foreground">
+              {t("A primeira versão desta resposta foi barrada; este texto é a reescrita. Motivo:")}{" "}
+              {t(motivo.texto)}
+            </p>
+          )}
           {body && (
             <Textarea
               aria-label={t("Resposta sugerida")}
