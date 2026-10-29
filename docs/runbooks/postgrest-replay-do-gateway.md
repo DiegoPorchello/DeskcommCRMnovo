@@ -66,6 +66,36 @@ pool, e o PostgREST não tenta de novo quando falha. O destravamento de emergên
 funções que estão sendo reexecutadas (uma linha `perform public.fn_pgrst_recusar_replay_do_gateway();` logo após o
 `begin`), esperar os rollbacks zerarem, mandar o `NOTIFY` de novo e RESTAURAR os corpos originais com `diff` vazio.
 
+## Outro ramo: falta de memória/IO (NÃO é replay do gateway)
+
+O sintoma é o mesmo 503 `PGRST002`, o mecanismo é outro — e trocar o diagnóstico aqui faz perder horas. Antes de
+suspeitar do replay, confirme que **o hook está registrado e o pool está vazio**; se estiver, este é o outro ramo.
+
+Medido numa instalação em Supabase **free, compute Nano (0,5 GB)** em 29/10: 100% das chamadas `/rest/v1` em 522 por
+~6 h, sem ninguém usando, e só voltou com *Restart project* manual.
+
+**Como o cache se perde sem ninguém pedir nada.** A Nano entra em swap (o painel mostrou ~480–600 MB e commitment de
+1,49 GB na véspera) e consome o *Disk IO Budget* (saldo 58%; esgotado = 5 MB/s). Com o disco lento, tudo passa do
+`statement_timeout=8s` do papel `authenticator` — inclusive a **introspecção do schema cache** do PostgREST
+(`WITH -- Recursively get the base types of domains …`), que com o banco saudável leva ~722 ms neste schema
+(213 tabelas, 584 funções, 684 policies, 759 índices, 222 triggers). Sem cache, toda requisição vira `PGRST002`, o
+PostgREST tenta de novo, a introspecção estoura de novo — e fica nesse laço por horas.
+
+**Diagnóstico (cada linha é comando, não afirmação):**
+
+```bash
+# 1. A introspecção estourou o teto? (o sinal mais direto deste ramo)
+psql "$SUPABASE_DB_URL" -Atc "select count(*) from postgres_logs
+  where event_message ilike '%base types of domains%' and event_message ilike '%statement timeout%'"
+# 2. O hook do replay está mesmo registrado? (se sim, este NÃO é o ramo do replay)
+psql "$SUPABASE_DB_URL" -Atc "select rolconfig from pg_roles where rolname='authenticator'"
+# 3. O disco está no limite? (painel: Infrastructure → Disk IO Budget)
+```
+
+**Conserto:** *Restart project* no painel do Supabase (é o único caminho que devolve o cache sem esperar a janela de
+IO). Depois, **sair da Nano**: ver `supabase-compute-insuficiente-free.md` para o compute mínimo e o que medir antes de
+escolher. Reiniciar sem trocar o compute devolve o serviço e ele volta a cair.
+
 ## Follow-up (não feito aqui)
 
 Conflito benigno não deveria sair como 5xx. Trocar `40001` por um código `PTxxx` (409) nas 25 funções / 71 pontos de

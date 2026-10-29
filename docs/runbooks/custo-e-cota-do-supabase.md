@@ -181,7 +181,21 @@ psql "$SUPABASE_DB_URL" -c \
     where relname in ('job_queue','api_audit_log','send_ledger','before_send_traces');"
 ```
 
-## 5. Se ainda não fechar
+## 5. Compute mínimo: a Nano (free) não é opção para este schema
+
+O plano free é uma **avaliação**, não um ambiente de operação. Com 213 tabelas, 584 funções, 684 policies, 759
+índices e 222 triggers, a introspecção do schema cache do PostgREST leva ~722 ms com o banco saudável — e o
+`statement_timeout` do papel `authenticator` é de 8 s. Na Nano (0,5 GB), o projeto entra em swap, esgota o *Disk IO
+Budget* e essa consulta passa do teto: o cache se perde, toda requisição vira `PGRST002` e o serviço fica fora por
+horas, sem ninguém usando (medido: ~6 h, voltou só com *Restart project*).
+
+**Recomendação:** **Micro (1 GB) no mínimo** para teste, **Small (2 GB) ou acima** para operação. Abaixo disso, o
+sintoma não é lentidão — é indisponibilidade.
+
+Diagnóstico completo e o outro ramo do `PGRST002`: `postgrest-replay-do-gateway.md` (seção "Outro ramo: falta de
+memória/IO") e `supabase-compute-insuficiente-free.md`.
+
+## 6. Se ainda não fechar
 
 Abra uma issue com: a saída dos três comandos da seção 1, a janela de tempo que
 elas cobrem, e o painel **Usage** do Supabase no mesmo período. Medição sem a
