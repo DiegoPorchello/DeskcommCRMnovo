@@ -15919,6 +15919,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      fn_vaga_ao_reviver_canal: { Args: { p_org: string; p_canal: string }; Returns: undefined };
       fn_vocabulario_de_tags: {
         Args: { p_org: string };
         Returns: {
