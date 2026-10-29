@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createClient } from "@/lib/supabase/server";
+import { invalidarSessao, invalidarUsuario, sessaoDosCookies } from "@/lib/auth/cache-curto";
 import { audit } from "@/lib/audit";
 import { encerrarPushDeTodosOsAparelhos } from "@/lib/notifications/encerrar-push-de-todos-os-aparelhos";
 
@@ -20,7 +21,13 @@ export async function signOut(): Promise<void> {
   // deslogado segue recebendo push da empresa.
   if (user) await encerrarPushDeTodosOsAparelhos(user.id, requestId);
 
+  const sessao = sessaoDosCookies((await cookies()).getAll());
   await supabase.auth.signOut();
+
+  // #3696: saída é revogação. O token pode continuar no cookie de outra aba, e
+  // o cache curto não pode devolver esta sessão depois do signOut.
+  if (user) invalidarUsuario(user.id);
+  if (sessao) invalidarSessao(sessao.chave);
 
   // Clear active_org cookie too.
   const store = await cookies();

@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { invalidarSessao, invalidarUsuario, sessaoDosCookies } from "@/lib/auth/cache-curto";
+import { cookies } from "next/headers";
 import { audit } from "@/lib/audit";
 import { encerrarPushDeTodosOsAparelhos } from "@/lib/notifications/encerrar-push-de-todos-os-aparelhos";
 import { headers } from "next/headers";
@@ -35,7 +37,13 @@ export async function signOutEverywhere(): Promise<void> {
     );
   }
 
+  const sessao = sessaoDosCookies((await cookies()).getAll());
   await supabase.auth.signOut({ scope: "global" });
+
+  // #3696: vale para todas as sessões da pessoa — por isso a invalidação é por
+  // IDENTIDADE, e não só pela sessão que clicou.
+  if (user) invalidarUsuario(user.id);
+  if (sessao) invalidarSessao(sessao.chave);
 
   if (user) {
     await audit({

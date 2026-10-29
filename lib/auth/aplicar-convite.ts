@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 
 import { audit } from "@/lib/audit";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { InvitePayload } from "@/lib/auth/invite-token";
 
@@ -124,6 +125,11 @@ export async function aplicarConvite(params: {
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
+
+  // #3696: quem aceitou convite entra AGORA — o cache curto desta identidade
+  // pode ter sido preenchido momentos antes (a tela de convite já carrega
+  // `loadAuthUser` com o usuário ainda sem vínculo).
+  invalidarUsuario(userId);
 
   return { ok: true, membershipId: resultado.id as string, mudou: Boolean(resultado.changed) };
 }

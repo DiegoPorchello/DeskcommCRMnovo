@@ -38,6 +38,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
 import { createClient } from "@/lib/supabase/server";
@@ -89,6 +90,10 @@ export async function POST(
     if (limite) return fail(limite.code, limite.message, 409, { requestId, details: limite.details });
     return fail("internal_error", updErr.message, 500, { requestId });
   }
+
+  // #3696: o vínculo voltou a valer agora — o snapshot em cache desta pessoa
+  // (que dizia "sem organização") precisa cair junto.
+  invalidarUsuario(targetUserId);
 
   await audit({
     action: "member.reactivated",
