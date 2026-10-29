@@ -63212,7 +63212,7 @@ revoke execute on function public.fn_is_platform_admin_full() from public, anon;
 grant execute on function public.fn_is_platform_admin_full() to authenticated, service_role;
 
 -- ---- grants explícitos das tabelas do apêndice (migration 9037) ----
--- manifest: **Privilégios explícitos, por tabela e por papel, nas 48 tabelas do apêndice que dependiam do default ACL (#3140, decisão 219 = A).** A partir de 30/10/2026 a Supabase deixa de conceder privilégio automático em tabela nova de `public`; uma tabela criada sem `GRANT` próprio fica inalcançável pela Data API. Em vez de reabrir o default amplo (recusado no #3521 e no #3612), cada tabela recebe o que o uso legítimo pede: `service_role` com select/insert/update/delete; `authenticated` só com os comandos para os quais a RLS da tabela tem policy permissiva (27 com as quatro, 1 com select/insert, 14 só com select, 6 sem nada); `anon` com nada — nenhuma delas tem policy que um visitante satisfaça. TRUNCATE, REFERENCES e TRIGGER saem dos três papéis. O estado final é o mesmo com ou sem o corte do provedor, porque cada tabela começa por `revoke all`. Tudo num bloco `do` só: o `update.sh` roda sem transação única, e revoke e grant em comandos soltos abririam uma janela de `permission denied` para o app no ar. Ficam de fora, de propósito: `modulo_secoes_lgpd` (fechada a todos, inclusive `service_role` — ADR-0002 D8) e as 7 tabelas que os módulos opcionais criam em tempo de execução (honorários, vendas): elas nascem dentro das funções provisionadoras e pedem `grant` lá dentro, em recorte próprio. O corpo do baseline (`ALTER DEFAULT PRIVILEGES … ON TABLES`) não muda. Espelho no apêndice do `supabase/baseline.sql`, logo antes da chamada final das travas de suporte; prova em `tests/invariants/grants-explicitos-das-tabelas-do-apendice.test.ts`.
+-- manifest: **Privilégios explícitos, por tabela e por papel, nas 48 tabelas do apêndice que dependiam do default ACL (#3140, decisão 219 = A).** A partir de 30/10/2026 a Supabase deixa de conceder privilégio automático em tabela nova de `public`; uma tabela criada sem `GRANT` próprio fica inalcançável pela Data API. Em vez de reabrir o default amplo (recusado no #3521 e no #3612), cada tabela recebe o que o uso legítimo pede: `service_role` com select/insert/update/delete; `authenticated` só com os comandos para os quais a RLS da tabela tem policy permissiva (28 com as quatro — uma delas, `automation_rule_runs`, por exceção declarada no bloco —, 1 com select/insert, 13 só com select, 6 sem nada); `anon` com nada — nenhuma delas tem policy que um visitante satisfaça. TRUNCATE, REFERENCES e TRIGGER saem dos três papéis. O estado final é o mesmo com ou sem o corte do provedor, porque cada tabela começa por `revoke all`. Tudo num bloco `do` só: o `update.sh` roda sem transação única, e revoke e grant em comandos soltos abririam uma janela de `permission denied` para o app no ar. Ficam de fora, de propósito: `modulo_secoes_lgpd` (fechada a todos, inclusive `service_role` — ADR-0002 D8) e as 7 tabelas que os módulos opcionais criam em tempo de execução (honorários, vendas): elas nascem dentro das funções provisionadoras e pedem `grant` lá dentro, em recorte próprio. O corpo do baseline (`ALTER DEFAULT PRIVILEGES … ON TABLES`) não muda. Espelho no apêndice do `supabase/baseline.sql`, logo antes da chamada final das travas de suporte; prova em `tests/invariants/grants-explicitos-das-tabelas-do-apendice.test.ts`.
 --
 -- Como a lista foi medida (num banco instalado do baseline, pelo test:db):
 --   - tabelas que o apêndice cria em `public` sem `grant … on public.<t>` próprio: 56;
@@ -63220,8 +63220,8 @@ grant execute on function public.fn_is_platform_admin_full() to authenticated, s
 --   - para cada uma, o ACL atual (`aclexplode`) e as policies (`pg_policies`):
 --     o `authenticated` daqui é o ACL atual ∩ comandos com policy PERMISSIVA para
 --     `public`/`authenticated` (as `support_write_*` são restritivas e não contam);
---   - escrita por `authenticated` nas 7 tabelas que perdem comando de escrita
---     (automation_rule_runs, calendar_connection_calendars, calendar_connections,
+--   - escrita por `authenticated` nas 6 tabelas que perdem comando de escrita
+--     (calendar_connection_calendars, calendar_connections,
 --     calendar_locations [update/delete], system_update_runs, system_version,
 --     webhook_lead_captures): no código, só pelo cliente admin ou por função
 --     `security definer` (fn_google_*, fn_redigir_captacoes_do_contato_anonimizado).
@@ -63287,15 +63287,19 @@ begin
   revoke all on table public.webhook_sources from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.webhook_sources to authenticated, service_role;
 
+  -- A única exceção à régua: a RLS só tem policy permissiva de select, mas
+  -- `tests/invariants/webhooks-rls.test.ts` mede a recusa da escrita direta
+  -- como negação da RLS (0 linhas), não como falta de privilégio. Mantém as
+  -- quatro, como hoje, até essa medição ser revista.
+  revoke all on table public.automation_rule_runs from anon, authenticated, service_role;
+  grant select, insert, update, delete on table public.automation_rule_runs to authenticated, service_role;
+
   -- authenticated lê e cria: não há policy permissiva de update/delete.
   revoke all on table public.calendar_locations from anon, authenticated, service_role;
   grant select, insert on table public.calendar_locations to authenticated;
   grant select, insert, update, delete on table public.calendar_locations to service_role;
 
   -- authenticated só lê: a escrita é do servidor (policy permissiva só de select).
-  revoke all on table public.automation_rule_runs from anon, authenticated, service_role;
-  grant select on table public.automation_rule_runs to authenticated;
-  grant select, insert, update, delete on table public.automation_rule_runs to service_role;
   revoke all on table public.calendar_connection_calendars from anon, authenticated, service_role;
   grant select on table public.calendar_connection_calendars to authenticated;
   grant select, insert, update, delete on table public.calendar_connection_calendars to service_role;
