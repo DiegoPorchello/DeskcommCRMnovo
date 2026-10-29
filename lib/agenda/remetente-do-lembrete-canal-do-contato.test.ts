@@ -17,6 +17,8 @@ import {
   transportaMensagem,
 } from "@/lib/channels/capabilities";
 
+import { canalAceitaTextoLivreAgora } from "@/lib/channels/janela";
+
 import { decidirRemetenteDoLembrete, type CanalDoLembrete } from "./remetente-do-lembrete";
 
 const agora = new Date("2026-10-29T12:00:00Z");
@@ -85,6 +87,25 @@ describe("lembrete escolhe o canal do contato (#2594)", () => {
 
   it("o vínculo indicado continua sendo autoridade sobre a preferência", () => {
     const r = decidirRemetenteDoLembrete([social, doTelefone], "c-social", agora, "5541999999999");
+    expect(r.canal?.id).toBe("c-social");
+  });
+
+  it("a preferência só desempata ELEGÍVEIS: canal de telefone fora da janela não cala o social que pode", () => {
+    // Regressão medida na triagem: o filtro por telefone vinha ANTES da
+    // elegibilidade, e um canal de telefone de janela fechada (ou desligado)
+    // esvaziava a lista — o lembrete que antes saía pelo social deixava de sair.
+    const restrito = (PROVIDERS_DE_TELEFONE as readonly string[]).find(
+      (p) => !canalAceitaTextoLivreAgora(p, null, agora),
+    ) as string;
+    expect(restrito).toBeTruthy();
+    const fechado = { ...canal("c-telefone", restrito), lastInboundAt: null };
+    const r = decidirRemetenteDoLembrete([fechado, social], null, agora, "5541999999999");
+    expect(r.canal?.id).toBe("c-social");
+  });
+
+  it("canal de telefone desligado não cala o social elegível", () => {
+    const desligado = { ...doTelefone, metadata: { disabled: true } };
+    const r = decidirRemetenteDoLembrete([desligado, social], null, agora, "5541999999999");
     expect(r.canal?.id).toBe("c-social");
   });
 });

@@ -27,7 +27,7 @@ export function decidirRemetenteDoLembrete(
   canais: CanalDoLembrete[],
   canalIndicadoId: string | null,
   agora: Date,
-  telefoneDoContato?: unknown,
+  telefoneDoContato?: string | null,
 ): RemetenteDoLembrete {
   const operante = (c: CanalDoLembrete) =>
     c.status === "WORKING" &&
@@ -42,26 +42,21 @@ export function decidirRemetenteDoLembrete(
       : { canal: null, motivo: "canal_fora_da_janela_24h" };
   }
 
-  // #2594: preferir o canal do próprio contato — WhatsApp (canal de telefone)
-  // primeiro quando houver telefone. Sem telefone, cai para o canal disponível
-  // (social/outro). Quando o filtro não reduz a lista (ou o telefone não foi
-  // informado), preserva o comportamento anterior (ambíguo com >1 elegível).
-  const telefone = normalizarTelefoneDoContato(telefoneDoContato);
-  const filtrarPorTelefone = telefone !== undefined;
-  let base = canais;
-  if (filtrarPorTelefone) {
-    const temTelefone = telefone !== null;
-    const alcancaveis = canais.filter((c) => {
-      const deTelefone = (PROVIDERS_DE_TELEFONE as readonly string[]).includes(
-        c.provider ?? "",
-      );
-      return temTelefone ? deTelefone : !deTelefone;
-    });
-    if (alcancaveis.length > 0) base = alcancaveis;
-  }
-  const candidatos = base
+  const elegiveis = canais
     .filter(operante)
     .filter((c) => canalAceitaTextoLivreAgora(c.provider, c.lastInboundAt, agora));
+  // #2594: entre os ELEGÍVEIS, o canal do próprio contato — com telefone, o de
+  // telefone; sem, o social. A preferência só desempata: se nenhum elegível é do
+  // tipo preferido, os elegíveis valem como antes. Telefone não informado
+  // (undefined) não inventa preferência.
+  let candidatos = elegiveis;
+  if (telefoneDoContato !== undefined) {
+    const temTelefone = Boolean(telefoneDoContato?.trim());
+    const preferidos = elegiveis.filter(
+      (c) => (PROVIDERS_DE_TELEFONE as readonly string[]).includes(c.provider ?? "") === temTelefone,
+    );
+    if (preferidos.length > 0) candidatos = preferidos;
+  }
   if (candidatos.length > 1) return { canal: null, motivo: "remetente_ambiguo" };
   const unico = candidatos[0];
   if (candidatos.length === 1 && unico) return { canal: unico, motivo: null };
@@ -74,6 +69,7 @@ export async function resolverRemetenteDoLembrete(
   compromisso: { organization_id: string; contact_id: string; conversation_id?: string | null },
   canalDoTipoId: string | null,
   agora: Date,
+  telefoneDoContato?: string | null,
 ): Promise<RemetenteDoLembrete> {
   const org = compromisso.organization_id;
   let indicado = canalDoTipoId;
@@ -89,18 +85,6 @@ export async function resolverRemetenteDoLembrete(
     if (!data?.channel_session_id)
       return { canal: null, motivo: "conversa_do_compromisso_invalida" };
     indicado = data.channel_session_id;
-  }
-  // #2594: telefone do contato, para preferir canal de telefone (WhatsApp).
-  let telefoneDoContato: string | null = null;
-  {
-    const { data: contato, error: erroContato } = await admin
-      .from("contacts")
-      .select("phone_number")
-      .eq("id", compromisso.contact_id)
-      .eq("organization_id", org)
-      .maybeSingle();
-    if (erroContato) return { canal: null, motivo: "falha_ao_ler_remetente" };
-    if (contato?.phone_number) telefoneDoContato = contato.phone_number;
   }
   // O automático lê os candidatos e confere a contagem total: uma lista
   // truncada não pode provar que só existe um remetente.
@@ -145,36 +129,3 @@ export async function resolverRemetenteDoLembrete(
   return decidirRemetenteDoLembrete(canais, indicado, agora, telefoneDoContato);
 }
 
-/** Normaliza o telefone do contato vindo de várias formas (string, objeto, boolean). */
-function normalizarTelefoneDoContato(valor: unknown): string | null | undefined {
-  if (valor === undefined) return undefined;
-  if (valor === null) return null;
-  if (typeof valor === "boolean") return valor ? "x" : null;
-  if (typeof valor === "string") return valor.trim() ? valor.trim() : null;
-  if (typeof valor === "object") {
-    const v = valor as Record<string, unknown>;
-    const candidato =
-      v.telefoneDoContato ??
-      v.telefone ??
-      v.phone ??
-      v.phone_number ??
-      (typeof v.contato === "object" && v.contato
-        ? (v.contato as Record<string, unknown>).phone_number
-        : undefined) ??
-      (typeof v.contact === "object" && v.contact
-        ? (v.contact as Record<string, unknown>).phone_number
-        : undefined);
-    if (candidato === undefined) {
-      if (v.hasPhone !== undefined) return v.hasPhone ? "x" : null;
-      if (v.has_phone !== undefined) return v.has_phone ? "x" : null;
-      return undefined;
-    }
-    if (candidato === null) return null;
-    const s = String(candidato).trim();
-    return s ? s : null;
-  }
-  return undefined;
-}
-
-/** Alias histórico usado por testes da issue #2594. */
-export const escolherCanalDoLembrete = decidirRemetenteDoLembrete;
