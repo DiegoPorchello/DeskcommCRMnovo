@@ -1,5 +1,5 @@
 ---
-impacto: comportamento_muda
+impacto: nada_mudou
 secao: corrigido
 titulo: Transferir a conversa leva junto o número de WhatsApp do novo responsável
 ---
