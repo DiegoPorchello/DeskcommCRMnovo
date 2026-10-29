@@ -50,9 +50,9 @@ export const DICIONARIO: Traducoes = {
   "Agente por número do remetente": { es: "Agente por número del remitente" },
   "Mensagens da conversa": { es: "Mensajes de la conversación" },
   "Novas mensagens · Ir para o fim": { es: "Mensajes nuevos · Ir al final" },
-  // Encaminhar mensagem (#2835) — botão na bolha do chat e o diálogo de destino.
   // Reescrita depois de uma barrada na prévia (doc de decisão 234).
   "A primeira versão desta resposta foi barrada; este texto é a reescrita. Motivo:": { es: "La primera versión de esta respuesta fue bloqueada; este texto es la reescritura. Motivo:" },
+  // Encaminhar mensagem (#2835) — botão na bolha do chat e o diálogo de destino.
   "Encaminhar": { es: "Reenviar" },
   "Encaminhar mensagem": { es: "Reenviar mensaje" },
   "Escolha a conversa que vai receber esta mensagem.": { es: "Elige la conversación que recibirá este mensaje." },

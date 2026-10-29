@@ -173,6 +173,21 @@ describe("a reescrita depois de uma barrada aparece no painel (doc 234, issue #2
     expect(screen.queryByText(REESCRITA)).toBeNull();
   });
 
+  /**
+   * `unknown_preview_tool` está no mapa, mas não vem de um envio barrado: a
+   * prévia o grava quando o modelo chama uma ferramenta que ela não conhece
+   * (`preview.ts`, ramo da ferramenta desconhecida), e o texto que vem depois
+   * passou na cadeia sem nenhuma versão recusada. Dizer "a primeira versão foi
+   * barrada" ali seria falso, e o motivo mandaria gerar de novo uma sugestão boa.
+   */
+  it("CONTROLE: ferramenta desconhecida na prévia não é versão barrada", async () => {
+    montar([draft({ status: "pending", original_body: "Oi, tudo bem?", error_code: "unknown_preview_tool" })]);
+
+    expect(await screen.findByText("Sugestão para revisar")).toBeTruthy();
+    expect(screen.queryByText(REESCRITA)).toBeNull();
+    expect(screen.queryByText(/ação que a prévia não reconhece/)).toBeNull();
+  });
+
   it("CONTROLE: código desconhecido em pendente não inventa motivo", async () => {
     montar([draft({ status: "pending", original_body: "Oi", error_code: "veto_novo_sem_par" })]);
 

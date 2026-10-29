@@ -39,8 +39,14 @@ export function ReplyReviewPanel({
   // prévia barrou a primeira versão e o agente escreveu outra na mesma rodada.
   // Os códigos de parada (`no_candidate`, truncamento, teto) só nascem SEM
   // candidato (`desfechoSemCandidato`), então texto gerado aqui exclui os dois.
+  // `unknown_preview_tool` também fica de fora: a prévia o grava quando o modelo
+  // chama uma ferramenta que ela não conhece, sem nenhum envio recusado — é o
+  // único código do mapa que convive com texto aceito sem versão barrada.
   const reescritaDepoisDeBarrada =
-    draft?.status === "pending" && !!motivo && !!draft.original_body?.trim();
+    draft?.status === "pending" &&
+    !!motivo &&
+    motivo.codigo !== "unknown_preview_tool" &&
+    !!draft.original_body?.trim();
   async function generate() {
     setNotice(null);
     setBusy(true);
