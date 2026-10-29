@@ -82,6 +82,12 @@ export async function POST(
     .eq("assigned_to_user_id", targetUserId)
     .in("status", ["open", "pending", "claimed", "ai_handling"]);
 
+  // #3696: derrubar o snapshot ANTES da escrita fecha a janela em que uma tela
+  // que atualiza "ao vivo" (evento → `router.refresh`) pede o valor velho no
+  // meio do UPDATE e o guarda de novo. A invalidação de baixo, depois do
+  // commit, cobre o intervalo que sobra.
+  invalidarUsuario(targetUserId);
+
   const nowIso = new Date().toISOString();
   const { error: updErr } = await supabase
     .from("user_organizations")

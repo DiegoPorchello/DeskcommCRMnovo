@@ -38,6 +38,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ user_id: 
     return fail("validation_error", "Selecione ao menos uma área permitida ao papel.", 400, {
       requestId,
     });
+  // #3696: derrubar o snapshot ANTES da escrita fecha a janela em que uma tela
+  // que atualiza "ao vivo" (evento → `router.refresh`) pede o valor velho no
+  // meio do UPDATE e o guarda de novo. A invalidação de baixo, depois do
+  // commit, cobre o intervalo que sobra.
+  invalidarUsuario(targetUserId);
+
   const { data, error } = await db
     .from("user_organizations")
     .update({ interface_settings: parsed.data.interface_settings })

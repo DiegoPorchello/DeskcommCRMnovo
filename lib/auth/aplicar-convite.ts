@@ -66,6 +66,11 @@ export async function aplicarConvite(params: {
 
   // Org, papel e convidador vêm EXCLUSIVAMENTE do token assinado; o usuário,
   // de quem chamou. Nada aqui vem de body de requisição.
+  // #3696: o snapshot desta identidade pode ter sido gravado na tela do
+  // convite, quando ela ainda não tinha vínculo. Derrubar ANTES do RPC impede
+  // que uma requisição concorrente o regrave durante a escrita; o
+  // `invalidarUsuario` do fim cobre o commit.
+  invalidarUsuario(userId);
   const { data: resultado, error } = await admin.rpc("fn_accept_team_invite", {
     p_interface_settings: payload.interface_settings ?? { preset: "completa" },
     p_user: userId,
