@@ -65614,10 +65614,40 @@ update public.lead_field_proposals p
      )
    );
 
+-- ---- catálogo: GPT-6.1 Terra (migration 9031) ----
+-- O dump --schema-only não traz seed pós-snapshot. Sem este apêndice, clones
+-- novos (install.sh) e clones atualizando (update.sh reaplica baseline.sql)
+-- ficam sem o gpt-6.1-terra em Provedores de IA e no seletor do agente.
+-- As DUAS tabelas com os MESMOS números (invariante catálogo×preço). Não mexe
+-- no padrão (segue gpt-5.6-terra). Fonte do preço no cabeçalho da migration.
+insert into public.ai_models
+  (provider, model_id, display_name, description, context_window,
+   input_price_per_million_cents, output_price_per_million_cents, supports_tools)
+values
+  ('openai', 'gpt-6.1-terra', 'GPT-6.1 Terra',
+   'Intermediário da linha 6: mais capaz que o Luna, metade do preço do Sol.',
+   1050000, 100, 500, true)
+on conflict (provider, model_id) do update set
+  display_name = excluded.display_name,
+  description = excluded.description,
+  context_window = excluded.context_window,
+  input_price_per_million_cents = excluded.input_price_per_million_cents,
+  output_price_per_million_cents = excluded.output_price_per_million_cents,
+  supports_tools = excluded.supports_tools,
+  deprecated_at = null;
+
+insert into public.ai_pricing
+  (model, prompt_cents_per_million_tokens, completion_cents_per_million_tokens, notes)
+values
+  ('gpt-6.1-terra', 100, 500, 'catálogo 9031 — acima de 272k tokens de entrada, 200/750')
+on conflict (model) do update set
+  prompt_cents_per_million_tokens = excluded.prompt_cents_per_million_tokens,
+  completion_cents_per_million_tokens = excluded.completion_cents_per_million_tokens,
+  notes = excluded.notes,
+  superseded_at = null;
 
 -- ---- lembrete de tarefa rearma na ocasião nova (migration 9038) ----
 -- manifest: **O lembrete de tarefa rearma na OCASIÃO, não na tarefa (#3639).** `agent_inbox_items.task_reminder_due_at timestamptz null` guarda o PRAZO que originou o aviso `task_due`/`task_overdue`; com `para_user_id` (0689) fecha a identidade — categoria + tarefa + responsável + prazo —, então responsável novo ou prazo novo rearma, e a rodada repetida sem mudança continua silenciosa (#2529). `inbox_task_reminder_ocasiao_unique` fecha a corrida de duas rodadas sobre a mesma ocasião.
-
 -- 9038 — O LEMBRETE DE TAREFA REARMA NA OCASIÃO (#3639)
 --
 -- A trava de "já avisado" é o próprio item da Central (#2529): `kind + ref_id`
@@ -65628,13 +65658,10 @@ update public.lead_field_proposals p
 -- cabeçalho da migration.
 --
 -- Não cria função, então pode ficar depois da VARREDURA anon.
-
 alter table public.agent_inbox_items
   add column if not exists task_reminder_due_at timestamptz null;
-
 comment on column public.agent_inbox_items.task_reminder_due_at is
   'Prazo que originou o aviso de lembrete de tarefa. Com categoria, ref_id e para_user_id forma a OCASIÃO do aviso: prazo novo ou responsável novo rearma; mesma ocasião não repete (#3639, #2529).';
-
 -- Backfill best-effort dos avisos legados: o prazo ATUAL da tarefa.
 update public.agent_inbox_items as aviso
    set task_reminder_due_at = tarefa.due_date
@@ -65644,7 +65671,6 @@ update public.agent_inbox_items as aviso
    and aviso.ref_id = tarefa.id
    and aviso.task_reminder_due_at is null
    and tarefa.due_date is not null;
-
 -- Dedupe ANTES do índice único (o update.sh reaplica em banco que já duplicou).
 with repetidas as (
   select id,
@@ -65663,7 +65689,6 @@ update public.agent_inbox_items as aviso
  where aviso.id = repetidas.id
    and repetidas.posicao > 1
    and aviso.status <> 'resolved';
-
 create unique index if not exists inbox_task_reminder_ocasiao_unique
   on public.agent_inbox_items (organization_id, ref_id, kind, para_user_id, task_reminder_due_at)
   where ref_kind = 'task' and task_reminder_due_at is not null;
