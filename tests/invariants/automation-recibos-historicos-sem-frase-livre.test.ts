@@ -52,7 +52,9 @@ describe("9018 — campos de erro históricos, sem apagar o recibo", () => {
       select 'RECIBOS:' || (${linhas})::text;
       select 'AUDIT2:' || (${auditCount})::text;
       rollback;`);
-    const snapshots = out.split("\n").filter((l) => l.startsWith("RECIBOS:")).map((l) => JSON.parse(l.slice(8)));
+    // json_agg pode separar registros por newline: ler o quadro inteiro até a
+    // próxima contagem, preservando todos os recibos e o JSON original.
+    const snapshots = Array.from(out.matchAll(/^RECIBOS:([\s\S]*?)\nAUDIT[12]:/gm), (m) => JSON.parse(m[1] ?? ""));
     expect(snapshots).toHaveLength(2);
     expect(snapshots[1]).toEqual(snapshots[0]);
     for (const [i, run] of snapshots[0].entries()) {

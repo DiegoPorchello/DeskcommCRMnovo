@@ -141,6 +141,11 @@ export function BarraDeRecursos({
         // A régua decide o rótulo, o `data-recurso-tipo` e o motivo do título —
         // os três leem a MESMA leitura, e o envio lê a mesma função.
         const leitura = lerRespostaRapidaGravada(recurso);
+        // O bloqueio do compositor e a invalidade do conteúdo são informações
+        // diferentes: quando coexistem, nenhuma pode esconder a outra.
+        const motivos = [dica, leitura.ok ? undefined : t(leitura.motivo)].filter(
+          (motivo): motivo is string => motivo !== undefined,
+        );
         return (
           <button
             key={recurso.id}
@@ -149,7 +154,7 @@ export function BarraDeRecursos({
             data-recurso-id={recurso.id}
             data-recurso-tipo={leitura.ok ? leitura.tipo : "invalida"}
             onClick={() => onEscolher(recurso)}
-            title={leitura.ok ? t("Prepara no compositor — você revisa e envia") : t(leitura.motivo)}
+            title={motivos.length ? motivos.join(" — ") : t("Prepara no compositor — você revisa e envia")}
             className="rounded-full border border-border bg-muted/60 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
           >
             {rotuloDoBotao(leitura, recurso.title)}

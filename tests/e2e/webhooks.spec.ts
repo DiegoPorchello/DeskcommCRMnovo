@@ -407,11 +407,12 @@ test.describe("webhooks & automações — fluxo completo", () => {
 
 /** Receitas reais de banco/API/worker; só a falha técnica dos leitores é fixture.
  * Bearers e payload pessoal sintético ficam fora de trace/vídeo/capturas. */
-test.describe("#3267 — uma vez por contato e o mesmo recibo nos dois leitores", () => {
-  test.use({ trace: "off", video: "off", actionTimeout: 15_000 });
-  test.setTimeout(180_000);
+const testSemGravacao = test.extend({ trace: "off", video: "off" });
+testSemGravacao.describe("#3267 — uma vez por contato e o mesmo recibo nos dois leitores", () => {
+  testSemGravacao.use({ actionTimeout: 15_000 });
+  testSemGravacao.setTimeout(180_000);
 
-  test("persiste a opção, executa uma tarefa por contato e isola o histórico MCP", async ({ page, request }) => {
+  testSemGravacao("persiste a opção, executa uma tarefa por contato e isola o histórico MCP", async ({ page, request }) => {
     const c = credenciaisSupabaseDeTeste();
     const admin = createClient(c.url, c.serviceRole, { auth: { persistSession: false, autoRefreshToken: false } });
     const base = JSON.parse(fs.readFileSync(CREDS_PATH, "utf8")) as { org_id: string; users: Record<string, { id: string }> };
@@ -439,7 +440,7 @@ test.describe("#3267 — uma vez por contato e o mesmo recibo nos dois leitores"
         "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${bearer}`,
       }, body: JSON.stringify({ jsonrpc: "2.0", id: 3267, method: "tools/call",
         params: { name: "crm_list_automation_runs", arguments: { limit: 100, ...(ruleId ? { rule_id: ruleId } : {}) } } }) });
-      expect(r.ok()).toBe(true);
+      expect(r.ok).toBe(true);
       const texto = await r.text();
       const linha = texto.split("\n").find((l) => l.startsWith("data:"));
       const body = JSON.parse(linha ? linha.slice(5).trim() : texto);

@@ -66465,7 +66465,7 @@ create policy channel_sessions_tenant_delete on public.channel_sessions
       and public.fn_role_at_least(organization_id, 'admin'))
     or public.fn_is_platform_admin_full()
   );
--- ---- uma vez por contato no motor de automação (migration 0731, #2974) ----
+-- ---- uma vez por contato no motor de automação (migration 0733, #2974) ----
 -- manifest: Execuções de automação ganham `contact_id` (uuid, FK para `contacts` com `on delete set null`) e o índice por regra e contato — é o que deixa a opção "no máximo uma vez por contato" (#2974) decidir pelo ESTADO PERSISTIDO, sobrevivendo a reinício do worker.
 --
 -- O motor dispara toda regra que casa em todo evento que casa: o lead que volta
@@ -66494,7 +66494,6 @@ comment on column public.automation_rule_runs.contact_id is
   'Contato desta execução, quando o evento deixou resolvê-lo. NULL = não resolvível (linha anterior a esta migration, ou evento sem contato) e NULL é fail-open para a opção "no máximo uma vez por contato" (#2974). on delete set null: o registro da execução sobrevive ao expurgo do contato.';
 
 -- ── a RESERVA da chave (regra, contato) — migration 0740, #2974 ──────────────
--- ── a RESERVA da chave (regra, contato) — migration 0734, #2974 ──────────────
 -- manifest: A chave `(regra, contato)` ganha uma tabela de RESERVA com índice único, tomada com `insert ... on conflict do nothing` ANTES de executar as ações — é o que faz o segundo dreno concorrente do mesmo contato perder a corrida em vez de rodar a regra outra vez (#2974).
 --
 -- A linha de execução acima é o ESTADO; ela não é o ÁRBITRO. O motor consulta,

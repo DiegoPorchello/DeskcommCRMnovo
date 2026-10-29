@@ -84,10 +84,17 @@ function banco() {
     );
   };
 
-  /** `metadata->>onboarding.eq.true,waha_session_name.eq.x` — o `.or()` da reserva. */
+  /**
+   * `metadata->>onboarding.eq.true,waha_session_name.eq.x` — o `.or()` da reserva —
+   * e `provider.neq.waha,phone_number.not.is.null,status.not.in.(FAILED,STOPPED)`,
+   * o da contagem de vagas (`lib/cobranca/uso.ts`). A vírgula dentro de `in.(…)`
+   * não separa condição.
+   */
   const casaOr = (expressao: string, linha: Linha): boolean =>
-    expressao.split(",").some((pedaco) => {
-      const [campo, operador, ...resto] = pedaco.split(".");
+    (expressao.match(/[^,(]+(?:\([^)]*\))?/g) ?? []).some((pedaco) => {
+      const [campo, ...partes] = pedaco.split(".");
+      const negado = partes[0] === "not";
+      const [operador, ...resto] = negado ? partes.slice(1) : partes;
       const esperado = resto.join(".");
       const valor = (campo ?? "")
         .split("->>")
@@ -96,8 +103,13 @@ function banco() {
             atual && typeof atual === "object" ? (atual as Linha)[parte] : undefined,
           linha,
         );
-      if (operador !== "eq") return false;
-      return String(valor ?? "") === esperado;
+      let casa: boolean;
+      if (operador === "eq") casa = String(valor ?? "") === esperado;
+      else if (operador === "neq") casa = String(valor ?? "") !== esperado;
+      else if (operador === "is" && esperado === "null") casa = valor == null;
+      else if (operador === "in") casa = esperado.replace(/^\(|\)$/g, "").split(",").includes(String(valor ?? ""));
+      else return false;
+      return negado ? !casa : casa;
     });
 
   function from(nome: string) {

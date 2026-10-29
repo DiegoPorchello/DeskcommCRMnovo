@@ -250,6 +250,32 @@ describe("cadastro (#3009): o caso novo é aceito, o vazio é recusado com motiv
  * ══════════════════════════════════════════════════════════════════════════════ */
 
 describe("barra do Inbox (#3009): o tipo vem da régua", () => {
+  it("preserva o bloqueio do rascunho e também identifica uma resposta inválida", () => {
+    const escolher = vi.fn();
+    const dica = "Há um rascunho no campo. Envie ou limpe antes de escolher uma resposta rápida.";
+    render(
+      <BarraDeRecursos
+        recursos={RECURSOS as unknown as Recurso[]}
+        onEscolher={escolher}
+        disabled
+        dica={dica}
+        storage={null}
+      />,
+    );
+
+    const valida = screen.getByRole("button", { name: /tabela e áudio/i });
+    expect(valida).toBeDisabled();
+    expect(valida).toHaveAttribute("data-recurso-tipo", "texto+imagem+audio");
+    expect(valida).toHaveAttribute("title", dica);
+    const invalida = screen.getByRole("button", { name: /resposta vazia/i });
+    expect(invalida).toBeDisabled();
+    expect(invalida.getAttribute("title")).toContain(dica);
+    expect(invalida.getAttribute("title")).toContain(MOTIVO_RESPOSTA_RAPIDA_SEM_CONTEUDO);
+    fireEvent.click(valida);
+    fireEvent.click(invalida);
+    expect(escolher).not.toHaveBeenCalled();
+  });
+
   it("os quatro casos: dois de antes byte a byte, o novo e o inválido", () => {
     render(
       <BarraDeRecursos
@@ -337,10 +363,20 @@ describe("envio (#3009): combinada vai para a fila e sai pelo caminho de sempre"
     renderComposer();
 
     fireEvent.click(screen.getByRole("button", { name: /^Boas vindas$/ }));
-    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("Oi Ana, tudo bem?");
+    const campo = screen.getByLabelText(/mensagem/i);
+    expect(campo).toHaveValue("Oi Ana, tudo bem?");
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /áudio preço/i }));
+    // A main protege o rascunho já preenchido: escolher outra resposta não o
+    // substitui. O caso de áudio começa depois de o operador limpar o campo.
+    const botaoDeAudio = screen.getByRole("button", { name: /áudio preço/i });
+    expect(botaoDeAudio).toBeDisabled();
+    fireEvent.click(botaoDeAudio);
+    expect(campo).toHaveValue("Oi Ana, tudo bem?");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.change(campo, { target: { value: "" } });
+    expect(botaoDeAudio).toBeEnabled();
+    fireEvent.click(botaoDeAudio);
     const fila = await screen.findByRole("dialog");
     expect(within(fila).getByText(ARQUIVO_AUDIO)).toBeInTheDocument();
     expect(h.enviar).not.toHaveBeenCalled();
