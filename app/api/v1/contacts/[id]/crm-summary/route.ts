@@ -164,9 +164,8 @@ export async function GET(
     .eq("crm_pipelines.is_archived", false)
     .order("updated_at", { ascending: false })
     .limit(3);
-  if (leadsPropriosErr) {
-    // mantém o mesmo caminho de erro da rota (sobe a falha)
-  }
+  // Sem `if` vazio: a falha desta leitura entra na varredura de `falha` abaixo,
+  // junto das outras, para o painel ver um veredito só.
 
   let leadsResolvidos = leadsProprios ?? [];
   if (leadsResolvidos.length === 0 && idsRelacionados.length > 0) {
@@ -216,7 +215,19 @@ export async function GET(
 
   // A falha SOBE. Engolir aqui devolveria lista vazia ao cliente e recriaria,
   // do lado do servidor, exatamente a mentira que esta rota veio desfazer.
-  const falha = (leadsPropriosErr ?? null) ?? orders.error ?? activities.error ?? demandas.error ?? fatos.error ?? historico.error;
+  // Varredura e não encadeamento de `??`: o `error` que o supabase-js tipa para
+  // estas leituras vem como `null` (o TS sabe disso e reprovaria `a ?? b` com
+  // “sempre nullish”), mas em runtime ele PODE vir preenchido — o encadeamento
+  // some no typecheck e o runtime continua vendo o erro. `.find` mantém a mesma
+  // semântica (o primeiro erro vence) sem depender do tipo declarado.
+  const falha = [
+    leadsPropriosErr,
+    orders.error,
+    activities.error,
+    demandas.error,
+    fatos.error,
+    historico.error,
+  ].find((e) => e != null);
   if (falha) {
     return fail("internal_error", falha.message, 500, { requestId });
   }
