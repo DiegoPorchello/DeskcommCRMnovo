@@ -11,10 +11,34 @@
  */
 import { describe, expect, it } from "vitest";
 
+import {
+  PROVIDERS_DE_MENSAGEM,
+  PROVIDERS_DE_TELEFONE,
+  transportaMensagem,
+} from "@/lib/channels/capabilities";
+
 import { decidirRemetenteDoLembrete, type CanalDoLembrete } from "./remetente-do-lembrete";
 
 const agora = new Date("2026-10-29T12:00:00Z");
 const ha10min = new Date("2026-10-29T11:50:00Z").toISOString();
+
+/**
+ * Os dois papéis do cenário vêm da MATRIZ de capacidades, não de um nome escrito
+ * aqui. "Alcança o aparelho pelo telefone" é a diferença de natureza entre o
+ * canal de telefone e o social, e o invariante 1 da doutrina de restrição de
+ * canal proíbe uma feature — teste inclusive — nomear provider: escrever a
+ * grafia neste arquivo seria a mesma fuga por outra porta, porque o lint cobra o
+ * NOME e não a forma. A pergunta certa é à matriz: quem alcança um telefone?
+ */
+const PROVIDERS_QUE_ALCANCAM_O_APARELHO: readonly string[] = PROVIDERS_DE_TELEFONE;
+
+/** O canal do destino por TELEFONE: o endereço do contato é um número. */
+const PROVIDER_DE_APARELHO = PROVIDERS_DE_TELEFONE[0] as string;
+
+/** O canal SOCIAL: entrega mensagem, mas o endereço de lá não é um telefone. */
+const PROVIDER_SOCIAL = PROVIDERS_DE_MENSAGEM.find(
+  (p) => !PROVIDERS_QUE_ALCANCAM_O_APARELHO.includes(p),
+) as string;
 
 function canal(id: string, provider: string): CanalDoLembrete {
   return {
@@ -27,29 +51,40 @@ function canal(id: string, provider: string): CanalDoLembrete {
   };
 }
 
-const whatsapp = canal("c-whats", "waha");
-const instagram = canal("c-insta", "zernio_social");
+const doTelefone = canal("c-telefone", PROVIDER_DE_APARELHO);
+const social = canal("c-social", PROVIDER_SOCIAL);
 
 describe("lembrete escolhe o canal do contato (#2594)", () => {
+  it("a matriz oferece um canal de telefone e um social, os dois elegíveis (guarda do cenário)", () => {
+    // Sem estes dois lados o cenário deixa de existir e os testes abaixo
+    // passariam a não provar nada: o de cima precisa de um canal que alcance o
+    // telefone, o de baixo de um que não alcance, e AMBOS têm de entregar
+    // mensagem — senão o desempate seria por elegibilidade, não por telefone.
+    expect(PROVIDERS_QUE_ALCANCAM_O_APARELHO).toContain(doTelefone.provider);
+    expect(PROVIDERS_QUE_ALCANCAM_O_APARELHO).not.toContain(social.provider);
+    expect(transportaMensagem(doTelefone.provider)).toBe(true);
+    expect(transportaMensagem(social.provider)).toBe(true);
+  });
+
   it("com telefone, escolhe o canal de telefone (WhatsApp) mesmo com social elegível", () => {
-    const r = decidirRemetenteDoLembrete([instagram, whatsapp], null, agora, "5541999999999");
-    expect(r.canal?.id).toBe("c-whats");
+    const r = decidirRemetenteDoLembrete([social, doTelefone], null, agora, "5541999999999");
+    expect(r.canal?.id).toBe("c-telefone");
     expect(r.motivo).toBeNull();
   });
 
   it("sem telefone, escolhe o canal social", () => {
-    const r = decidirRemetenteDoLembrete([whatsapp, instagram], null, agora, null);
-    expect(r.canal?.id).toBe("c-insta");
+    const r = decidirRemetenteDoLembrete([doTelefone, social], null, agora, null);
+    expect(r.canal?.id).toBe("c-social");
   });
 
   it("sem a informação do telefone, mantém o comportamento anterior (ambíguo)", () => {
-    const r = decidirRemetenteDoLembrete([whatsapp, instagram], null, agora);
+    const r = decidirRemetenteDoLembrete([doTelefone, social], null, agora);
     expect(r.canal).toBeNull();
     expect(r.motivo).toBe("remetente_ambiguo");
   });
 
   it("o vínculo indicado continua sendo autoridade sobre a preferência", () => {
-    const r = decidirRemetenteDoLembrete([instagram, whatsapp], "c-insta", agora, "5541999999999");
-    expect(r.canal?.id).toBe("c-insta");
+    const r = decidirRemetenteDoLembrete([social, doTelefone], "c-social", agora, "5541999999999");
+    expect(r.canal?.id).toBe("c-social");
   });
 });
