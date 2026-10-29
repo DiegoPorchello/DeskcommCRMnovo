@@ -1,4 +1,4 @@
--- manifest: A vaga de número do plano deixa de ser ocupada por sessão que morreu SEM parear (#3416); quem tem número — FAILED inclusive — e quem tem conexão em curso continua contando.
+-- manifest: A vaga de número do plano deixa de ser ocupada por sessão WAHA que morreu SEM parear (#3416); quem tem número — FAILED inclusive — e quem tem conexão em curso continua contando.
 -- 0809 — O SLOT DO PLANO É DO NÚMERO, NÃO DA LINHA (#3416).
 --
 -- ── A causa, medida no produto ──────────────────────────────────────────────
@@ -23,8 +23,10 @@
 --     `app/api/v1/channel-sessions/[id]/route.ts` + `numeroObservadoDaSessao`),
 --     não ausência de conexão.
 --
--- Fica de fora só a linha MORTA e SEM NÚMERO: `FAILED`/`STOPPED` com
--- `phone_number` nulo. É a sessão que nasceu de um QR que ninguém leu.
+-- Fica de fora só a linha MORTA e SEM NÚMERO do WAHA: `FAILED`/`STOPPED` com
+-- `phone_number` nulo e `provider = 'waha'`. É a sessão que nasceu de um QR que
+-- ninguém leu. Nos outros provedores o número não identifica a conexão (ela é
+-- endereçada por conta/id do provedor), e a linha sem número continua ocupando.
 --
 -- ⚠️ A metade do RESERVADO é o que impede trocar um defeito de cobrança por
 -- outro maior. A trava é de CRIAÇÃO de linha; o pareamento não passa por ela
@@ -76,7 +78,9 @@ begin
   -- #3416: a linha que morreu sem nunca ter número não ocupa vaga — nem é
   -- recusada quando a empresa já está no teto, porque recusar seria cobrar por
   -- uma vaga que ela não ocupa (e o espelho de status do webhook congelaria).
-  if new.phone_number is null and new.status in ('FAILED', 'STOPPED') then
+  -- Só no WAHA: nos outros provedores o número não identifica a conexão, e a
+  -- linha sem número segue sendo uma conexão da empresa.
+  if new.provider = 'waha' and new.phone_number is null and new.status in ('FAILED', 'STOPPED') then
     return new;
   end if;
   if tg_op = 'UPDATE' then
@@ -99,7 +103,7 @@ begin
    where cs.organization_id = new.organization_id
      and cs.archived_at is null
      and cs.provider <> 'wacalls'
-     and (cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED'))
+     and (cs.provider <> 'waha' or cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED'))
      and cs.id <> new.id;
 
   if v_em_uso >= v_limite then

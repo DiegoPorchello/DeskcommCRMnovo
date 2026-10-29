@@ -37,7 +37,9 @@ describe("lerUsoDaOrganizacao — a mesma contagem dos gatilhos de limite (spec 
       // #3416: a vaga é do NÚMERO. Um `.or` só, porque o PostgREST encadeia com
       // AND — "tem número" E "não está morta" não é a régua (o canal pareado e
       // caído continua ocupando a vaga, que é exatamente o controle da issue).
-      ["or", "phone_number.not.is.null,status.not.in.(FAILED,STOPPED)"],
+      // A isenção da linha morta sem número é só do WAHA: nos outros provedores
+      // o número não identifica a conexão.
+      ["or", "provider.neq.waha,phone_number.not.is.null,status.not.in.(FAILED,STOPPED)"],
     ]);
   });
 
@@ -73,8 +75,16 @@ describe("a contagem do app é a dos gatilhos", () => {
     expect(c).toContain("cs.provider <> 'wacalls'");
     // A vaga é do NÚMERO: número pareado ocupa (FAILED inclusive — a queda não
     // devolve o slot), e a conexão em curso/WORKING sem número ainda conta.
-    expect(c).toContain("cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED')");
+    expect(c).toContain("cs.provider <> 'waha' or cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED')");
     // E a linha nova que nasce morta e sem número não é recusada pelo teto.
-    expect(c).toContain("new.phone_number is null and new.status in ('FAILED', 'STOPPED')");
+    expect(c).toContain("new.provider = 'waha' and new.phone_number is null and new.status in ('FAILED', 'STOPPED')");
+  });
+
+  it("reviver: a mesma régua, e só a linha WAHA morta sem número passa pela conferência", () => {
+    const inicio = baseline.lastIndexOf("create or replace function public.fn_vaga_ao_reviver_canal(");
+    expect(inicio, "fn_vaga_ao_reviver_canal sumiu do baseline").toBeGreaterThan(-1);
+    const c = baseline.slice(inicio, baseline.indexOf("$$;", inicio));
+    expect(c).toContain("cs.provider <> 'waha' or cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED')");
+    expect(c).toContain("or v_canal.provider <> 'waha'");
   });
 });

@@ -51,12 +51,12 @@ begin
    where organization_id = p_org and id = p_canal
    for update;
 
-  -- Só interessa a linha que hoje NÃO ocupa vaga (morta e sem número, 0809) e
+  -- Só interessa a linha que hoje NÃO ocupa vaga (WAHA morta e sem número, 0809) e
   -- vai voltar a ocupar. Número pareado, conexão em curso, arquivada e voz
   -- seguem como antes: reconectar um número que já é da empresa nunca é recusado.
   if not found
      or v_canal.archived_at is not null
-     or v_canal.provider = 'wacalls'
+     or v_canal.provider <> 'waha'
      or v_canal.phone_number is not null
      or v_canal.status not in ('FAILED', 'STOPPED') then
     return;
@@ -69,7 +69,7 @@ begin
      where cs.organization_id = p_org
        and cs.archived_at is null
        and cs.provider <> 'wacalls'
-       and (cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED'))
+       and (cs.provider <> 'waha' or cs.phone_number is not null or cs.status not in ('FAILED', 'STOPPED'))
        and cs.id <> p_canal;
 
     if v_em_uso >= v_limite then
