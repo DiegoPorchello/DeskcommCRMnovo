@@ -12924,6 +12924,16 @@ export const DICIONARIO: Traducoes = {
       es: "Este embudo no tiene etapa abierta para recibir el nuevo intento.",
     },
   "Escolha o funil de destino": { es: "Elige el embudo de destino" },
+  // A etapa de entrada (issue #3643): o segundo seletor do diálogo, cujo padrão
+  // continua sendo a primeira etapa aberta — a decisão do servidor.
+  "Etapa de entrada": { es: "Etapa de entrada" },
+  "Primeira etapa aberta (padrão)": { es: "Primera etapa abierta (predeterminada)" },
+  "Sem escolha, o negócio entra na primeira etapa aberta do funil.": {
+    es: "Sin elegir, el negocio entra en la primera etapa abierta del embudo.",
+  },
+  "Este funil não tem etapa aberta para receber o negócio. Escolha outro funil.": {
+    es: "Este embudo no tiene una etapa abierta para recibir el negocio. Elige otro embudo.",
+  },
   "Este é o único funil. Crie outro funil para poder levar o negócio até ele.": {
     es: "Este es el único embudo. Crea otro embudo para poder llevar el negocio hasta él.",
   },
