@@ -357,10 +357,11 @@ export interface SessaoDosCookies {
  * anterior?", e o `exp` lido do próprio JWT é o teto do TTL.
  *
  * Devolve `null` quando não há cookie de sessão ou quando o formato não é
- * reconhecido (valor em base64url quebrado, JSON inválido, JWT sem `exp`).
- * Nesses casos o cache de sessão simplesmente não é usado: a requisição vai
- * pelo caminho de sempre. Fail-open para o comportamento antigo — nunca para
- * "autorizado".
+ * reconhecido (valor em base64url quebrado, JSON inválido). Para JWT sem `exp`
+ * legível, devolve a chave com `expiraEm: null` — e quem chama não cacheia sem
+ * teto. Nesses casos o cache de sessão simplesmente não é usado: a requisição
+ * vai pelo caminho de sempre. Fail-open para o comportamento antigo — nunca
+ * para "autorizado".
  */
 export function sessaoDosCookies(
   cookies: { name: string; value: string }[],
