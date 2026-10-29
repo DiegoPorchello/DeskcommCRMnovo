@@ -13,10 +13,13 @@
  * vaga quando tem número pareado (a queda do transporte não devolve o slot) ou
  * quando é conexão em curso/`WORKING` sem número gravado ainda — `WORKING` sem
  * número é atraso do espelho, não ausência de conexão. Fora da conta fica só a
- * linha MORTA (`FAILED`/`STOPPED`) sem número do WAHA: nos outros provedores o
- * número não identifica a conexão, e a linha sem ele segue ocupando a vaga.
+ * linha MORTA (`FAILED`/`STOPPED`) sem número do canal pareado por QR
+ * (`PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO`): nos outros provedores o número não
+ * identifica a conexão, e a linha sem ele segue ocupando a vaga.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO } from "@/lib/channels/capabilities";
 
 export interface UsoDaOrganizacao {
   assentos: number;
@@ -54,7 +57,7 @@ export async function lerUsoDaOrganizacao(db: SupabaseClient, orgId: string): Pr
       // #3416: a linha morta SEM número não é número nenhum. `.or` e não dois
       // filtros em sequência: o PostgREST encadeia com AND, e "tem número E não
       // está morta" zeraria a contagem de TODO canal pareado.
-      .or("provider.neq.waha,phone_number.not.is.null,status.not.in.(FAILED,STOPPED)"),
+      .or(`provider.neq.${PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO},phone_number.not.is.null,status.not.in.(FAILED,STOPPED)`),
   ]);
   if (membros.error || canais.error) return null;
   return { assentos: membros.count ?? 0, canais: canais.count ?? 0 };
