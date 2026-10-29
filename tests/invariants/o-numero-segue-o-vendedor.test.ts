@@ -19,13 +19,18 @@
  *    nada muda — é o caso legítimo.
  * 3. Dono novo SEM número conectado: nada muda (a transferência não falha; quem
  *    recusa, com erro claro, é o ENVIO humano — `lib/channels/numero-do-atendente.ts`).
- * 4. Organização sem roteamento por vendedor (número sem policy): nada muda.
+ * 4. O número atual não é de ninguém (sem policy — o número geral da empresa):
+ *    nada muda, mesmo que o dono novo tenha número próprio.
+ * 4b. Número próprio do dono novo de OUTRO canal (`provider`): nada muda.
  * 5. O contato já tem conversa no número do vendedor novo: o dono muda e o
  *    número não (re-apontar estouraria `uniq_conversations_1to1_per_contact_session`
  *    e a transferência inteira falharia).
  * 6. A troca de CARTEIRA (`fn_definir_carteira_do_cliente`) leva as conversas
  *    abertas do dono anterior ao novo dono, pela mesma porta — e o número junto.
  * 7. A carteira NÃO rouba conversa que já é de outra pessoa.
+ * 8. A carteira NÃO tira da IA a conversa que ela está atendendo (doc 237, 3-B).
+ * 9. A prévia do diálogo (`fn_numero_da_transferencia`) diz o número que a troca
+ *    grava, e só `service_role` a executa.
  *
  * Organização própria (namespace `ffffffff-`) para não encostar nas governanças
  * que rodam no mesmo banco.
@@ -44,13 +49,21 @@ const GESTOR = "ffffffff-1111-4000-8000-000000000005"; // manager (só ele muda 
 const SESSAO_A = "ffffffff-2222-4000-8000-000000000001";
 const SESSAO_B = "ffffffff-2222-4000-8000-000000000002";
 const SESSAO_SEM_POLICY = "ffffffff-2222-4000-8000-000000000003";
+const SESSAO_A_OFICIAL = "ffffffff-2222-4000-8000-000000000004"; // outro canal, também de A
 
 const POLITICA_A = "ffffffff-3333-4000-8000-000000000001";
 const POLITICA_B = "ffffffff-3333-4000-8000-000000000002";
+const POLITICA_A_OFICIAL = "ffffffff-3333-4000-8000-000000000003";
 
 const CONTATO = "ffffffff-4444-4000-8000-000000000001";
 const CONTATO_DA_CARTEIRA = "ffffffff-4444-4000-8000-000000000002";
 const CONTATO_DO_COLEGA = "ffffffff-4444-4000-8000-000000000003";
+// Contatos SÓ deste caso: o controle não pode passar por colisão com a conversa
+// que um caso anterior deixou no número de B.
+const CONTATO_DO_NUMERO_GERAL = "ffffffff-4444-4000-8000-000000000004";
+const CONTATO_DO_OUTRO_CANAL = "ffffffff-4444-4000-8000-000000000005";
+const CONTATO_DA_IA = "ffffffff-4444-4000-8000-000000000006";
+const CONTATO_DA_PREVIA = "ffffffff-4444-4000-8000-000000000007";
 
 /** Chama a RPC como a rota chama: `service_role`. */
 function transfere(conversa: string, para: string | null, motivo = "transfer"): void {
@@ -82,7 +95,13 @@ function donoDe(conversa: string): string {
 }
 
 /** Uma conversa nova por caso, para um caso não contaminar o outro. */
-function conversaNova(id: string, contato: string, sessao: string, dono: string | null): string {
+function conversaNova(
+  id: string,
+  contato: string,
+  sessao: string,
+  dono: string | null,
+  status = "claimed",
+): string {
   sql(`
     delete from public.conversations where id = '${id}';
     -- Um contato por conversa e por sessão (0027): o caso anterior desta suíte
@@ -91,7 +110,7 @@ function conversaNova(id: string, contato: string, sessao: string, dono: string 
      where organization_id = '${ORG}' and contact_id = '${contato}' and channel_session_id = '${sessao}';
     insert into public.conversations
       (id, organization_id, contact_id, channel_session_id, status, assigned_to_user_id, provider_conversation_id)
-    values ('${id}', '${ORG}', '${contato}', '${sessao}', 'claimed',
+    values ('${id}', '${ORG}', '${contato}', '${sessao}', '${status}',
             ${dono ? `'${dono}'` : "null"}, 'thread-do-numero-antigo');
   `);
   return id;
@@ -131,22 +150,36 @@ describe("#3642 — a conversa segue o número do vendedor novo", () => {
       on conflict (id) do update
         set status = 'WORKING', archived_at = null, metadata = '{}'::jsonb;
 
+      -- Um número de A em OUTRO canal (Cloud API): B só tem WhatsApp via WAHA.
+      insert into public.channel_sessions
+        (id, organization_id, provider, meta_phone_number_id, webhook_secret_encrypted, status, display_name)
+      values
+        ('${SESSAO_A_OFICIAL}', '${ORG}', 'meta_cloud', 'numero-inv-oficial', '\\x00'::bytea, 'WORKING', 'Numero A Oficial')
+      on conflict (id) do update
+        set status = 'WORKING', archived_at = null, metadata = '{}'::jsonb;
+
       insert into public.channel_routing_policies (id, organization_id, channel_session_id) values
         ('${POLITICA_A}', '${ORG}', '${SESSAO_A}'),
-        ('${POLITICA_B}', '${ORG}', '${SESSAO_B}')
+        ('${POLITICA_B}', '${ORG}', '${SESSAO_B}'),
+        ('${POLITICA_A_OFICIAL}', '${ORG}', '${SESSAO_A_OFICIAL}')
       on conflict (id) do nothing;
 
       delete from public.channel_routing_responsibles where organization_id = '${ORG}';
       insert into public.channel_routing_responsibles (organization_id, policy_id, user_id) values
         ('${ORG}', '${POLITICA_A}', '${VENDEDOR_A}'),
         ('${ORG}', '${POLITICA_A}', '${VENDEDOR_C}'),  -- número COMPARTILHADO
-        ('${ORG}', '${POLITICA_B}', '${VENDEDOR_B}')
+        ('${ORG}', '${POLITICA_B}', '${VENDEDOR_B}'),
+        ('${ORG}', '${POLITICA_A_OFICIAL}', '${VENDEDOR_A}')
       on conflict do nothing;
 
       insert into public.contacts (id, organization_id, display_name) values
         ('${CONTATO}', '${ORG}', 'Contato Numero'),
         ('${CONTATO_DA_CARTEIRA}', '${ORG}', 'Contato Carteira'),
-        ('${CONTATO_DO_COLEGA}', '${ORG}', 'Contato Do Colega')
+        ('${CONTATO_DO_COLEGA}', '${ORG}', 'Contato Do Colega'),
+        ('${CONTATO_DO_NUMERO_GERAL}', '${ORG}', 'Contato Numero Geral'),
+        ('${CONTATO_DO_OUTRO_CANAL}', '${ORG}', 'Contato Outro Canal'),
+        ('${CONTATO_DA_IA}', '${ORG}', 'Contato Da IA'),
+        ('${CONTATO_DA_PREVIA}', '${ORG}', 'Contato Da Previa')
       on conflict (id) do update
         set carteira_user_id = null, carteira_origem = null, carteira_definida_em = null;
     `);
@@ -202,14 +235,27 @@ describe("#3642 — a conversa segue o número do vendedor novo", () => {
     expect(sessaoDe(conversa)).toBe(SESSAO_A);
   });
 
-  it("organização sem roteamento por vendedor (número sem policy): nada muda — controle", () => {
+  it("o número geral da empresa (sem policy) não vira o número do vendedor — controle", () => {
+    // Contato SEM conversa no número de B: se o número mudasse, nada o impediria.
+    // (Com o contato dos outros casos, a conversa que o caso 1 deixou no número
+    // de B barrava a troca por colisão, e o controle passava pelo motivo errado.)
     const conversa = conversaNova(
-      "ffffffff-5555-4000-8000-000000000004", CONTATO, SESSAO_SEM_POLICY, VENDEDOR_A);
+      "ffffffff-5555-4000-8000-000000000004", CONTATO_DO_NUMERO_GERAL, SESSAO_SEM_POLICY, VENDEDOR_A);
 
     transfere(conversa, VENDEDOR_B);
 
     expect(donoDe(conversa)).toBe(VENDEDOR_B);
     expect(sessaoDe(conversa)).toBe(SESSAO_SEM_POLICY);
+  });
+
+  it("número próprio do dono novo em OUTRO canal: a conversa não troca de canal", () => {
+    const conversa = conversaNova(
+      "ffffffff-5555-4000-8000-000000000009", CONTATO_DO_OUTRO_CANAL, SESSAO_A_OFICIAL, VENDEDOR_A);
+
+    transfere(conversa, VENDEDOR_B);
+
+    expect(donoDe(conversa)).toBe(VENDEDOR_B);
+    expect(sessaoDe(conversa)).toBe(SESSAO_A_OFICIAL);
   });
 
   it("o contato já tem conversa no número do vendedor novo: o dono muda e o número não", () => {
@@ -251,5 +297,53 @@ describe("#3642 — a conversa segue o número do vendedor novo", () => {
 
     expect(donoDe(conversa)).toBe(VENDEDOR_C);
     expect(sessaoDe(conversa)).toBe(SESSAO_A);
+  });
+
+  it("doc 237, 3-B: a carteira NÃO tira da IA a conversa que ela está atendendo", () => {
+    const conversa = conversaNova(
+      "ffffffff-5555-4000-8000-000000000010", CONTATO_DA_IA, SESSAO_A, null, "ai_handling");
+    sql(`update public.contacts
+            set carteira_user_id = '${VENDEDOR_A}', carteira_origem = 'manual', carteira_definida_em = now()
+          where id = '${CONTATO_DA_IA}';`);
+
+    defineCarteira(CONTATO_DA_IA, VENDEDOR_B);
+
+    expect(donoDe(conversa)).toBe("NULL");
+    expect(sessaoDe(conversa)).toBe(SESSAO_A);
+    expect(
+      lastLine(sql(`select status from public.conversations where id = '${conversa}';`)),
+    ).toBe("ai_handling");
+    // E a carteira mudou de verdade — o controle de que a função rodou.
+    expect(
+      lastLine(sql(`select carteira_user_id::text from public.contacts where id = '${CONTATO_DA_IA}';`)),
+    ).toBe(VENDEDOR_B);
+  });
+
+  it("a prévia do diálogo diz o número que a troca grava — e só service_role a executa", () => {
+    const conversa = conversaNova(
+      "ffffffff-5555-4000-8000-000000000011", CONTATO_DA_PREVIA, SESSAO_A, VENDEDOR_A);
+
+    const previa = (para: string) =>
+      lastLine(
+        sql(`
+          set role service_role;
+          select coalesce(public.fn_numero_da_transferencia('${ORG}', '${conversa}', '${para}')::text, 'NULL');
+        `),
+      );
+    expect(previa(VENDEDOR_C)).toBe("NULL"); // número compartilhado: fica
+    expect(previa(SEM_NUMERO)).toBe("NULL"); // sem número: fica
+    expect(previa(VENDEDOR_B)).toBe(SESSAO_B);
+
+    transfere(conversa, VENDEDOR_B);
+    expect(sessaoDe(conversa)).toBe(SESSAO_B);
+
+    for (const papel of ["anon", "authenticated"]) {
+      expect(
+        lastLine(
+          sql(`select has_function_privilege('${papel}',
+                 'public.fn_numero_da_transferencia(uuid, uuid, uuid)', 'execute');`),
+        ),
+      ).toBe("f");
+    }
   });
 });

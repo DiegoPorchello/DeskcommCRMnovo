@@ -59,6 +59,12 @@ export interface OpcoesDoDubleDoHandler {
   politicasDeNumero?: LinhaDoDuble[];
   responsaveisDeNumero?: LinhaDoDuble[];
   /**
+   * As sessões que a guarda do envio lê por lista (`.in("id", ...)`) para saber
+   * se quem envia tem número próprio CONECTADO do mesmo canal (doc 237, 1-B).
+   * Padrão: `[]` — ninguém tem número próprio.
+   */
+  sessoesDeNumero?: LinhaDoDuble[];
+  /**
    * A linha de `ai_agents` que a conferência da operação do agente lê pela REST
    * (`assertAgentOperationSupabase`). Função = estado vivo: o teste pausa o
    * agente entre uma bolha e outra.
@@ -232,6 +238,17 @@ export function criarDubleDoHandler(
             capturas.filtros.channel_sessions!.push({ coluna, valor });
             return cadeia;
           },
+          // A leitura POR LISTA (`.in("id", ...)`) é a da guarda do número do
+          // atendente (#3642): devolve as linhas de `sessoesDeNumero`, aguardável
+          // como o PostgREST. Fica numa cadeia à parte para a leitura de uma
+          // linha só (`maybeSingle`) continuar exatamente como era.
+          in: (coluna: string, valores: unknown[]) => ({
+            then: (ok: (v: unknown) => unknown, erro?: (e: unknown) => unknown) =>
+              Promise.resolve({
+                data: (opcoes.sessoesDeNumero ?? []).filter((l) => valores.includes(l[coluna])),
+                error: null,
+              }).then(ok, erro),
+          }),
           maybeSingle: async () => ({
             data: {
               metadata: opcoes.channelMetadata ?? {},
@@ -532,14 +549,22 @@ export function criarDubleDoHandler(
             ? opcoes.politicasDeNumero ?? []
             : opcoes.responsaveisDeNumero ?? [];
         const filtros: Array<[string, unknown]> = [];
+        const listas: Array<[string, unknown[]]> = [];
+        const casa = (l: LinhaDoDuble) =>
+          filtros.every(([c, v]) => l[c] === v) &&
+          listas.every(([c, vs]) => vs.includes(l[c]));
         const cadeia = {
           select: () => cadeia,
           eq: (coluna: string, valor: unknown) => {
             filtros.push([coluna, valor]);
             return cadeia;
           },
+          in: (coluna: string, valores: unknown[]) => {
+            listas.push([coluna, valores]);
+            return cadeia;
+          },
           maybeSingle: async () => ({
-            data: linhas.find((l) => filtros.every(([c, v]) => l[c] === v)) ?? null,
+            data: linhas.find(casa) ?? null,
             error: null,
           }),
           // A segunda e a terceira leitura do quadro são AGUARDADAS direto
@@ -549,7 +574,7 @@ export function criarDubleDoHandler(
           // regra" — o teste ficaria verde sem exercitar nada.
           then: (ok: (v: unknown) => unknown, erro?: (e: unknown) => unknown) =>
             Promise.resolve({
-              data: linhas.filter((l) => filtros.every(([c, v]) => l[c] === v)),
+              data: linhas.filter(casa),
               error: null,
             }).then(ok, erro),
         };

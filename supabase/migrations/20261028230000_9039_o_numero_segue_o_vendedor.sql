@@ -1,4 +1,4 @@
--- manifest: o número de WhatsApp acompanha o dono da conversa — transferir (ou passar a carteira) leva a conversa para a sessão do novo vendedor, e o envio recusa quem não responde pelo número (#3642).
+-- manifest: o número de WhatsApp acompanha o dono da conversa — transferir (ou passar a carteira) leva a conversa para a sessão do novo vendedor; a carteira não tira da IA a conversa que ela atende; a decisão do número mora em fn_numero_da_transferencia, consultada também pelo aviso do diálogo de Transferir (#3642, doc 237).
 --
 -- 9039 — o número de WhatsApp segue o vendedor (#3642).
 --
@@ -24,13 +24,16 @@
 -- caminhos de troca de uma vez (Transferir um e em lote, Assumir, MCP,
 -- automação, passagem de carteira) sem nenhum deles precisar sabê-la.
 --
--- Três casos ficam de fora de propósito, e são os controles:
+-- Os controles, em que nada muda (regra inteira em `fn_numero_da_transferencia`,
+-- a mesma que o diálogo de Transferir consulta para avisar antes):
 --   * o novo dono JÁ responde pelo número da conversa (número compartilhado por
---     vários responsáveis) → nada muda;
---   * o novo dono não tem número conectado → nada muda (a transferência não
---     falha; quem recusa, com erro claro, é o ENVIO humano — nunca pelo número
---     do colega);
---   * organização sem roteamento por vendedor (número sem policy) → nada muda.
+--     vários responsáveis);
+--   * o número atual não é de ninguém (sem policy, ou policy sem responsáveis):
+--     o número geral da empresa não vira o número de um vendedor;
+--   * o novo dono não tem número conectado do MESMO canal (a transferência não
+--     falha; o envio humano segue como hoje — doc 237, escolha 1-B);
+--   * conversa de grupo;
+--   * o contato já tem conversa no número novo.
 --
 -- `provider_conversation_id` é zerado junto, quando o número troca: é o id da
 -- thread no provider ANTERIOR, e mandá-lo para a sessão nova seria endereçar uma
@@ -43,14 +46,103 @@
 -- anterior — o mesmo defeito, pela outra porta. Agora a carteira passa as
 -- conversas abertas do contato que estavam com o dono anterior (ou sem dono) ao
 -- novo dono PELA MESMA função de atribuição, com `reason = 'transfer'`: a
--- conversa, o evento na linha do tempo e o número andam juntos.
+-- conversa, o evento na linha do tempo e o número andam juntos. As que a IA
+-- está atendendo (`ai_handling`) ficam com a IA (doc 237, escolha 3-B).
 --
 -- ─── Baseline ───────────────────────────────────────────────────────────────
 --
 -- Os dois corpos entram por EDIÇÃO NO LUGAR nas últimas definições do
--- `supabase/baseline.sql` (o mesmo desenho das 0426/0513), e não como apêndice:
--- são `create or replace` de funções que já existem, e nenhuma função nova
--- nasce aqui.
+-- `supabase/baseline.sql` (o mesmo desenho das 0426/0513): são `create or
+-- replace` de funções que já existem. A função nova
+-- (`fn_numero_da_transferencia`) entra no apêndice logo antes da última
+-- `fn_conversation_assign`, que a chama — e antes da VARREDURA anon.
+
+-- ---- o número da transferência (migration 9039, #3642) ----
+-- Para qual número a conversa vai quando muda de dono. Nulo = o número fica.
+-- Uma função só para a decisão, porque DUAS peças precisam da mesma resposta:
+-- `fn_conversation_assign` (que aplica) e o diálogo de Transferir (que avisa
+-- antes — `GET /api/v1/conversations/[id]/transfer`). Duas cópias da regra
+-- divergiriam, e o aviso diria um número enquanto a troca grava outro.
+--
+-- A regra, em ordem:
+--   * o número ATUAL é de pessoas (policy com ao menos um responsável) e o dono
+--     novo não é um deles — número sem dono (o número geral da empresa) e número
+--     compartilhado em que o dono novo já está não mudam;
+--   * o dono novo responde por um número CONECTADO (`WORKING`, não arquivado,
+--     não desativado) do MESMO canal (`provider`) — uma conversa de rede social
+--     não vira WhatsApp, nem o contrário;
+--   * conversa de grupo não muda: o grupo existe no telefone de quem está nele;
+--   * o primeiro desses números, em ordem estável;
+--   * e o contato ainda não tem conversa nesse número
+--     (`uniq_conversations_1to1_per_contact_session`, 0027): re-apontar estouraria
+--     a transação e a transferência falharia — o dono muda e o número não.
+--
+-- Sem `security definer`: quem chama é a `fn_conversation_assign` (definer, roda
+-- como dona) e a rota pelo cliente admin. Ninguém mais precisa dela.
+create or replace function public.fn_numero_da_transferencia(
+  p_organization_id uuid,
+  p_conversation_id uuid,
+  p_to_user_id uuid
+)
+returns uuid
+language sql
+stable
+set search_path = ''
+as $$
+  with conversa as (
+    select c.id, c.organization_id, c.contact_id, c.channel_session_id, atual.provider
+      from public.conversations c
+      join public.channel_sessions atual
+        on atual.organization_id = c.organization_id and atual.id = c.channel_session_id
+     where c.id = p_conversation_id
+       and c.organization_id = p_organization_id
+       and c.is_group = false
+       and p_to_user_id is not null
+  ),
+  responsaveis_do_atual as (
+    select r.user_id
+      from conversa
+      join public.channel_routing_policies p
+        on p.organization_id = conversa.organization_id
+       and p.channel_session_id = conversa.channel_session_id
+      join public.channel_routing_responsibles r
+        on r.organization_id = p.organization_id and r.policy_id = p.id
+  ),
+  candidato as (
+    select cs.id
+      from conversa
+      join public.channel_routing_responsibles r
+        on r.organization_id = conversa.organization_id and r.user_id = p_to_user_id
+      join public.channel_routing_policies p
+        on p.organization_id = r.organization_id and p.id = r.policy_id
+      join public.channel_sessions cs
+        on cs.organization_id = p.organization_id and cs.id = p.channel_session_id
+     where exists (select 1 from responsaveis_do_atual)
+       and not exists (select 1 from responsaveis_do_atual a where a.user_id = p_to_user_id)
+       and cs.provider = conversa.provider
+       and cs.archived_at is null
+       and cs.status = 'WORKING'
+       and coalesce(cs.metadata ->> 'disabled', 'false') <> 'true'
+     order by cs.created_at, cs.id
+     limit 1
+  )
+  select candidato.id
+    from candidato, conversa
+   where not exists (
+     select 1
+       from public.conversations o
+      where o.organization_id = conversa.organization_id
+        and o.contact_id = conversa.contact_id
+        and o.channel_session_id = candidato.id
+        and o.is_group = false
+        and o.id <> conversa.id
+   );
+$$;
+
+revoke execute on function public.fn_numero_da_transferencia(uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.fn_numero_da_transferencia(uuid, uuid, uuid)
+  to service_role;
 
 CREATE OR REPLACE FUNCTION public.fn_conversation_assign(p_organization_id uuid, p_conversation_id uuid, p_to_user_id uuid, p_reason text, p_expected_assignee uuid DEFAULT NULL::uuid, p_enforce_expected boolean DEFAULT false)
  RETURNS SETOF conversations
@@ -125,51 +217,13 @@ begin
   -- regra vale para Transferir (um e em lote), Assumir, MCP, automação e a
   -- passagem de carteira sem nenhum deles precisar conhecê-la.
   --
-  -- A ordem do `order by` é a regra: se o novo dono JÁ responde pelo número da
-  -- conversa (número compartilhado, ou reatribuição ao mesmo dono), ele fica;
-  -- senão, o primeiro número conectado dele, em ordem estável para dois números
-  -- do mesmo dono não escolherem um número diferente a cada chamada.
-  --
-  -- Dono sem número conectado e organização sem roteamento por vendedor não
-  -- mudam nada: a transferência nunca falha por causa do número. Quem recusa,
-  -- com erro claro, é o envio humano (`lib/channels/numero-do-atendente.ts`) —
-  -- nunca pelo número do colega.
-  if p_to_user_id is not null then
-    select cs.id into v_numero
-      from public.channel_routing_responsibles r
-      join public.channel_routing_policies p
-        on p.organization_id = r.organization_id and p.id = r.policy_id
-      join public.channel_sessions cs
-        on cs.organization_id = p.organization_id and cs.id = p.channel_session_id
-     where r.organization_id = p_organization_id
-       and r.user_id = p_to_user_id
-       and cs.archived_at is null
-       and cs.status = 'WORKING'
-       and coalesce(cs.metadata ->> 'disabled', 'false') <> 'true'
-     order by (cs.id = v_conv.channel_session_id) desc, cs.created_at, cs.id
-     limit 1;
-
-    -- Colisão: o contato JÁ tem conversa nesse número
-    -- (`uniq_conversations_1to1_per_contact_session`, 0027 — um contato por
-    -- conversa e por sessão, inclusive fechada). Re-apontar estouraria a
-    -- transação inteira e a transferência falharia; então o dono muda e o número
-    -- não — quem responde pelo número novo é a conversa que já está lá.
-    if v_numero is not null and v_numero is distinct from v_conv.channel_session_id then
-      perform 1
-        from public.conversations c
-       where c.organization_id = p_organization_id
-         and c.contact_id = v_conv.contact_id
-         and c.channel_session_id = v_numero
-         and c.is_group = false
-         and c.id <> p_conversation_id;
-      if found then
-        v_numero := null;
-      end if;
-    end if;
-
-    v_trocou_de_numero := v_numero is not null
-                          and v_numero is distinct from v_conv.channel_session_id;
-  end if;
+  -- QUAL número é a `fn_numero_da_transferencia` — a mesma que o diálogo de
+  -- Transferir consulta para avisar antes de confirmar, então o aviso e o efeito
+  -- não divergem. Nulo = o número fica (número compartilhado, número sem dono,
+  -- dono novo sem número conectado do mesmo canal, grupo, ou o contato já tem
+  -- conversa no número novo). A transferência nunca falha por causa do número.
+  v_numero := public.fn_numero_da_transferencia(p_organization_id, p_conversation_id, p_to_user_id);
+  v_trocou_de_numero := v_numero is not null;
 
   update public.conversations
      set assigned_to_user_id = p_to_user_id,
@@ -324,7 +378,12 @@ begin
           from public.conversations c
          where c.organization_id = p_org
            and c.contact_id = p_contact
-           and c.status in ('open', 'pending', 'claimed', 'ai_handling')
+           -- Doc 237, escolha 3-B: a conversa que a IA está atendendo
+           -- (`ai_handling`) fica com a IA. Passá-la aqui a deixaria "assumida" e
+           -- a IA calada sem prazo — um efeito que ninguém pediu ao trocar a
+           -- carteira. Quando a IA passar a conversa para humano, o dono da
+           -- carteira já é o vendedor novo.
+           and c.status in ('open', 'pending', 'claimed')
            and (c.assigned_to_user_id is null or c.assigned_to_user_id = v_anterior)
          order by c.id
       loop

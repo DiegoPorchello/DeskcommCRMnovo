@@ -49,17 +49,19 @@ export const DICIONARIO: Traducoes = {
   "Escolha abaixo um fallback público diferente dos agentes reservados. Salve antes de testar. O teste de classificação de texto não simula o número de origem.": { es: "Elija abajo un agente público de reserva distinto de los agentes reservados. Guarde antes de probar. La prueba de clasificación de texto no simula el número de origen." },
   "Agente por número do remetente": { es: "Agente por número del remitente" },
   "Mensagens da conversa": { es: "Mensajes de la conversación" },
-  // Número do atendente no envio (#3642) — a recusa de quem tenta responder por
-  // um número que não é o dele, e a da leitura que não pôde ser feita.
-  "Você não tem um número de WhatsApp conectado. Esta conversa está no número de outro atendente e não pode ser respondida por ele — peça a quem administra a Central de Conexões para conectar o seu.": {
-    es: "No tienes un número de WhatsApp conectado. Esta conversación está en el número de otro atendente y no se puede responder por él: pídele a quien administra la Central de Conexiones que conecte el tuyo.",
-  },
-  "Esta conversa está no número de outro atendente. Transfira a conversa para você para responder por aqui.": {
-    es: "Esta conversación está en el número de otro atendente. Transfiere la conversación a tu nombre para responder por aquí.",
+  // Número do atendente no envio (#3642) — a recusa de quem tem número próprio e
+  // tenta responder pelo de outra pessoa, e a da leitura que não pôde ser feita.
+  "Esta conversa está no número de outro atendente, e você tem número próprio. Responda ao cliente pela conversa do seu número, ou peça que esta seja transferida para você.": {
+    es: "Esta conversación está en el número de otro atendente, y tienes un número propio. Respóndele al cliente desde la conversación de tu número, o pide que esta te sea transferida.",
   },
   "Não foi possível conferir o número desta conversa. Nada foi enviado.": {
     es: "No fue posible verificar el número de esta conversación. No se envió nada.",
   },
+  // O aviso do diálogo de Transferir e a prévia que o alimenta (#3642, doc 237, 2-A).
+  "A conversa vai continuar pelo número de {nome} ({numero}).": {
+    es: "La conversación va a continuar por el número de {nome} ({numero}).",
+  },
+  "Destino inválido.": { es: "Destino inválido." },
   "Novas mensagens · Ir para o fim": { es: "Mensajes nuevos · Ir al final" },
   // Versão anterior barrada na prévia (doc de decisão 234): a moldura e as causas de `motivoDoVeto`.
   "Uma versão anterior desta sugestão foi barrada: {causa}. Confira antes de enviar.": { es: "Una versión anterior de esta sugerencia fue bloqueada: {causa}. Revísala antes de enviar." },

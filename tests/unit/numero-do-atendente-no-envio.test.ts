@@ -6,12 +6,16 @@
  * novo que — por qualquer motivo — ficou numa conversa que está no número de
  * outra pessoa recebe uma recusa CLARA, e nada sai pelo WhatsApp do colega.
  *
- * O caso que a issue chama de grave é o 2: o vendedor tem número próprio, a
+ * O caso que a issue chama de grave: o vendedor tem número próprio, a
  * conversa está no número de outro. Antes, a mensagem saía pela sessão da
  * conversa — o cliente recebia no número do antigo e o antigo continuava
  * recebendo as respostas no celular dele.
  *
  * Os controles estão aqui de propósito, para a guarda não virar parede:
+ *  - quem NÃO tem número próprio (o gerente fora da lista, numa empresa com um
+ *    número só) responde como hoje — doc 237, escolha 1-B;
+ *  - número próprio desconectado, ou de OUTRO canal, não conta como "ter
+ *    número" — a mesma régua da transferência;
  *  - número COMPARTILHADO (os dois na lista): envia;
  *  - instalação sem um número por vendedor: nada muda;
  *  - ator NÃO humano (token de integração, IA): nada muda — a regra é de quem
@@ -33,6 +37,8 @@ const SESSAO_COMPARTILHADA = "66666666-6666-4666-8666-666666666666";
 const EU = "55555555-5555-4555-8555-555555555555";
 const COLEGA = "77777777-7777-4777-8777-777777777777";
 const POLITICA = "88888888-8888-4888-8888-888888888888";
+const MINHA_POLITICA = "99999999-9999-4999-8999-999999999999";
+const MINHA_SESSAO = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 const conversa = (sessao: string) => ({
   id: CONV,
@@ -61,12 +67,14 @@ async function enviar(opcoes: {
   sessao: string;
   politicas?: Array<Record<string, unknown>>;
   responsaveis?: Array<Record<string, unknown>>;
+  sessoes?: Array<Record<string, unknown>>;
   actor?: HandlerCtx["actor"];
 }) {
   const duble = criarDubleDoHandler({
     conversation: conversa(opcoes.sessao),
     politicasDeNumero: opcoes.politicas,
     responsaveisDeNumero: opcoes.responsaveis,
+    sessoesDeNumero: opcoes.sessoes,
   });
   const ctx: HandlerCtx = {
     organization_id: ORG,
@@ -81,16 +89,29 @@ async function enviar(opcoes: {
 
 const politicaDaSessaoDoColega = [{ id: POLITICA, organization_id: ORG, channel_session_id: SESSAO_DO_COLEGA }];
 
+/** O colega na lista do número da conversa, e EU com o meu número próprio. */
+const comMeuNumero = (sessao: Record<string, unknown>) => ({
+  sessao: SESSAO_DO_COLEGA,
+  politicas: [
+    ...politicaDaSessaoDoColega,
+    { id: MINHA_POLITICA, organization_id: ORG, channel_session_id: MINHA_SESSAO },
+  ],
+  responsaveis: [
+    { policy_id: POLITICA, user_id: COLEGA, organization_id: ORG },
+    { policy_id: MINHA_POLITICA, user_id: EU, organization_id: ORG },
+  ],
+  sessoes: [
+    { id: MINHA_SESSAO, provider: "zernio", status: "WORKING", archived_at: null, metadata: {}, ...sessao },
+  ],
+});
+
+/** Recusado pela guarda do número? (Outro desfecho do dublê não importa aqui.) */
+const recusadoPeloNumero = (resultado: unknown) =>
+  resultado instanceof ApiError && resultado.code === "conversa_em_numero_de_outro_atendente";
+
 describe("#3642 — o envio humano não fala pelo número do colega", () => {
-  it("⭐ vendedor com número PRÓPRIO numa conversa no número do colega: 409, e nada é gravado", async () => {
-    const { resultado, duble } = await enviar({
-      sessao: SESSAO_DO_COLEGA,
-      politicas: politicaDaSessaoDoColega,
-      responsaveis: [
-        { policy_id: POLITICA, user_id: COLEGA, organization_id: ORG },
-        { policy_id: "outra-policy", user_id: EU, organization_id: ORG },
-      ],
-    });
+  it("⭐ vendedor com número PRÓPRIO conectado numa conversa no número do colega: 409, e nada é gravado", async () => {
+    const { resultado, duble } = await enviar(comMeuNumero({}));
 
     expect(resultado).toBeInstanceOf(ApiError);
     const err = resultado as ApiError;
@@ -102,19 +123,26 @@ describe("#3642 — o envio humano não fala pelo número do colega", () => {
     expect(duble.capturas.patches.conversations).toHaveLength(0);
   });
 
-  it("⭐ vendedor SEM número conectado: 409 com a frase do número ausente, nada gravado", async () => {
-    const { resultado, duble } = await enviar({
+  it("⭐ doc 237, 1-B: o gerente SEM número próprio e fora da lista responde como hoje", async () => {
+    const { resultado } = await enviar({
       sessao: SESSAO_DO_COLEGA,
       politicas: politicaDaSessaoDoColega,
       responsaveis: [{ policy_id: POLITICA, user_id: COLEGA, organization_id: ORG }],
+      actor: { type: "user", id: EU, role: "manager" },
     });
 
-    const err = resultado as ApiError;
-    expect(err).toBeInstanceOf(ApiError);
-    expect(err.status).toBe(409);
-    expect(err.code).toBe("atendente_sem_numero_conectado");
-    expect(err.message).toMatch(/não tem um número/i);
-    expect(duble.capturas.inserts.messages).toHaveLength(0);
+    expect(recusadoPeloNumero(resultado)).toBe(false);
+    if (resultado instanceof ApiError) expect(resultado.status).not.toBe(409);
+  });
+
+  it("número próprio DESCONECTADO não conta como ter número: responde como hoje", async () => {
+    const { resultado } = await enviar(comMeuNumero({ status: "STOPPED" }));
+    expect(recusadoPeloNumero(resultado)).toBe(false);
+  });
+
+  it("número próprio de OUTRO canal não conta: a conversa não iria para ele, e o envio não é barrado", async () => {
+    const { resultado } = await enviar(comMeuNumero({ provider: "waha" }));
+    expect(recusadoPeloNumero(resultado)).toBe(false);
   });
 
   it("número COMPARTILHADO: quem está na lista responde por ele e não é recusado", async () => {

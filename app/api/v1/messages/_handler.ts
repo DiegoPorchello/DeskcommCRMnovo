@@ -569,11 +569,13 @@ export async function sendMessageHandler(
   // colega — a mensagem saía pelo número do antigo e a resposta do cliente ia
   // para o celular dele.
   //
-  // A troca de dono já leva o número junto (`fn_conversation_assign`, migration
-  // 9032). O que sobra para esta guarda é o caso sem número para levar: o dono
-  // novo não tem conexão própria e a conversa ficou no número de outra pessoa.
-  // Aí o envio recusa ALTO — nunca sai pelo número do colega. Organização sem um
-  // número por vendedor não muda nada aqui (é o controle da regra).
+  // A troca de dono já leva o número junto (`fn_numero_da_transferencia`,
+  // migration 9039). O que sobra para esta guarda é quem TEM número próprio
+  // conectado e está numa conversa no número de outra pessoa (o contato já tinha
+  // conversa no número dele, ou a conversa é anterior a esta regra): aí o envio
+  // recusa ALTO — nunca sai pelo número do colega. Quem não tem número segue
+  // respondendo como hoje (doc 237, escolha 1-B), e organização sem um número
+  // por vendedor não muda nada aqui (é o controle da regra).
   //
   // Só ator HUMANO: token de integração e IA não são "a pessoa do número" — o
   // defeito é de quem digita no Inbox, e restringir a regra a ele deixa os
@@ -582,6 +584,7 @@ export async function sendMessageHandler(
     const numero = await quadroDoNumero(supabase, {
       organizationId: ctx.organization_id,
       channelSessionId: c.channel_session_id ?? null,
+      provider: c.channel_sessions?.provider ?? null,
       userId: ctx.actor.id,
     });
     if (numero.leitura === "indisponivel") {

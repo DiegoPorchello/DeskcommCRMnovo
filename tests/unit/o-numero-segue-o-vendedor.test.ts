@@ -20,7 +20,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   CODIGO_NUMERO_DE_OUTRO,
-  CODIGO_SEM_NUMERO,
   MENSAGEM_DO_NUMERO,
   quadroDoNumero,
   vereditoDoNumero,
@@ -32,8 +31,10 @@ const SESSAO = "22222222-2222-4222-8222-222222222222";
 const ATENDENTE = "33333333-3333-4333-8333-333333333333";
 const COLEGA = "44444444-4444-4444-8444-444444444444";
 const POLITICA = "55555555-5555-4555-8555-555555555555";
+const MINHA_POLITICA = "66666666-6666-4666-8666-666666666666";
+const MINHA_SESSAO = "77777777-7777-4777-8777-777777777777";
 
-// ─── Banco falso (só as duas tabelas do roteamento) ──────────────────────────
+// ─── Banco falso (as tabelas do roteamento e as sessões) ─────────────────────
 type Linha = Record<string, unknown>;
 
 /**
@@ -44,20 +45,25 @@ type Linha = Record<string, unknown>;
 function bancoFalso(opcoes: {
   policies: Linha[];
   responsibles: Linha[];
-  erroEm?: "channel_routing_policies" | "channel_routing_responsibles";
+  sessions?: Linha[];
+  erroEm?: "channel_routing_policies" | "channel_routing_responsibles" | "channel_sessions";
 }) {
   const tabelas: Record<string, Linha[]> = {
     channel_routing_policies: opcoes.policies,
     channel_routing_responsibles: opcoes.responsibles,
+    channel_sessions: opcoes.sessions ?? [],
   };
 
   const from = (nome: string) => {
     const linhas = tabelas[nome] ?? [];
     const filtros: Array<[string, unknown]> = [];
-    const casa = (l: Linha) => filtros.every(([c, v]) => l[c] === v);
+    const listas: Array<[string, unknown[]]> = [];
+    const casa = (l: Linha) =>
+      filtros.every(([c, v]) => l[c] === v) && listas.every(([c, vs]) => vs.includes(l[c]));
     const b: Record<string, unknown> = {};
     b.select = () => b;
     b.eq = (c: string, v: unknown) => (filtros.push([c, v]), b);
+    b.in = (c: string, vs: unknown[]) => (listas.push([c, vs]), b);
     const ler = () => {
       if (opcoes.erroEm === nome) return { data: null, error: { message: "indisponivel" } };
       return { data: linhas.filter(casa), error: null };
@@ -75,7 +81,25 @@ function bancoFalso(opcoes: {
   return { from } as unknown as SupabaseClient;
 }
 
-const LEITURA = { organizationId: ORG, channelSessionId: SESSAO, userId: ATENDENTE };
+const LEITURA = { organizationId: ORG, channelSessionId: SESSAO, provider: "waha", userId: ATENDENTE };
+
+/** O colega na lista do número da conversa; o atendente com o próprio número. */
+function comNumeroProprio(sessao: Linha = {}, erroEm?: "channel_sessions") {
+  return bancoFalso({
+    policies: [
+      { id: POLITICA, organization_id: ORG, channel_session_id: SESSAO },
+      { id: MINHA_POLITICA, organization_id: ORG, channel_session_id: MINHA_SESSAO },
+    ],
+    responsibles: [
+      { policy_id: POLITICA, user_id: COLEGA, organization_id: ORG },
+      { policy_id: MINHA_POLITICA, user_id: ATENDENTE, organization_id: ORG },
+    ],
+    sessions: [
+      { id: MINHA_SESSAO, organization_id: ORG, provider: "waha", status: "WORKING", archived_at: null, metadata: {}, ...sessao },
+    ],
+    erroEm,
+  });
+}
 
 describe("#3642 — a decisão: quem responde por este número pode enviar?", () => {
   it("organização sem um número por vendedor: libera (controle — nada muda)", () => {
@@ -107,22 +131,19 @@ describe("#3642 — a decisão: quem responde por este número pode enviar?", ()
     ).toEqual({ ok: false, codigo: CODIGO_NUMERO_DE_OUTRO });
   });
 
-  it("vendedor SEM número conectado é recusado — nunca pelo número do colega", () => {
+  it("doc 237, 1-B: quem NÃO tem número próprio responde como hoje, mesmo fora da lista", () => {
     expect(
       vereditoDoNumero({
         roteamentoPorVendedor: true,
         atendenteRespondePelaSessao: false,
         atendenteTemNumero: false,
       }),
-    ).toEqual({ ok: false, codigo: CODIGO_SEM_NUMERO });
+    ).toEqual({ ok: true });
   });
 
-  it("as duas recusas têm frase no idioma de quem atende (e nenhuma promete o número alheio)", () => {
-    for (const codigo of [CODIGO_SEM_NUMERO, CODIGO_NUMERO_DE_OUTRO]) {
-      expect(MENSAGEM_DO_NUMERO[codigo]).toMatch(/número de outro atendente/);
-    }
-    expect(MENSAGEM_DO_NUMERO[CODIGO_SEM_NUMERO]).toMatch(/não tem um número/);
-    expect(MENSAGEM_DO_NUMERO[CODIGO_NUMERO_DE_OUTRO]).toMatch(/Transfira a conversa para você/);
+  it("a recusa diz o que fazer, sem prometer o número alheio", () => {
+    expect(MENSAGEM_DO_NUMERO[CODIGO_NUMERO_DE_OUTRO]).toMatch(/número de outro atendente/);
+    expect(MENSAGEM_DO_NUMERO[CODIGO_NUMERO_DE_OUTRO]).toMatch(/transferida para você/);
   });
 });
 
@@ -160,18 +181,32 @@ describe("#3642 — a leitura do roteamento (quadroDoNumero)", () => {
     });
   });
 
-  it("fora da lista, com número próprio em outra policy: o número é de OUTRO", async () => {
-    const db = bancoFalso({
-      policies: [{ id: POLITICA, organization_id: ORG, channel_session_id: SESSAO }],
-      responsibles: [
-        { policy_id: POLITICA, user_id: COLEGA, organization_id: ORG },
-        { policy_id: "outra-policy", user_id: ATENDENTE, organization_id: ORG },
-      ],
-    });
-    const r = await quadroDoNumero(db, LEITURA);
+  it("fora da lista, com número próprio CONECTADO do mesmo canal: o número é de OUTRO", async () => {
+    const r = await quadroDoNumero(comNumeroProprio(), LEITURA);
     expect(r).toEqual({
       leitura: "ok",
       quadro: { roteamentoPorVendedor: true, atendenteRespondePelaSessao: false, atendenteTemNumero: true },
+    });
+  });
+
+  it("número próprio desconectado, arquivado, desativado ou de outro canal NÃO conta como ter número", async () => {
+    for (const sessao of [
+      { status: "STOPPED" },
+      { archived_at: "2026-10-01T00:00:00.000Z" },
+      { metadata: { disabled: true } },
+      { provider: "zernio_social" },
+    ]) {
+      const r = await quadroDoNumero(comNumeroProprio(sessao), LEITURA);
+      expect(r, JSON.stringify(sessao)).toEqual({
+        leitura: "ok",
+        quadro: { roteamentoPorVendedor: true, atendenteRespondePelaSessao: false, atendenteTemNumero: false },
+      });
+    }
+  });
+
+  it("leitura das sessões que falha também não libera", async () => {
+    expect(await quadroDoNumero(comNumeroProprio({}, "channel_sessions"), LEITURA)).toEqual({
+      leitura: "indisponivel",
     });
   });
 
