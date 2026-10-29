@@ -14907,6 +14907,15 @@ export const DICIONARIO: Traducoes = {
   "Pagante, passageiro…": { es: "Pagador, pasajero…" },
   "Participante adicionado.": { es: "Participante agregado." },
   "Participante removido.": { es: "Participante eliminado." },
+  // ─── #3669 F1: ligar ao negócio o número de outra pessoa do cliente ───
+  "+ telefone": { es: "+ teléfono" },
+  "Digite o telefone.": { es: "Escribe el teléfono." },
+  "Comprador, loja…": { es: "Comprador, tienda…" },
+  "Ligar ao negócio": { es: "Vincular al negocio" },
+  "Telefone ligado ao negócio.": { es: "Teléfono vinculado al negocio." },
+  "O contato que já tinha este número foi ligado ao negócio.": {
+    es: "El contacto que ya tenía este número fue vinculado al negocio.",
+  },
   "Este contato já é o contato principal do negócio.": {
     es: "Este contacto ya es el contacto principal del negocio.",
   },
