@@ -1,6 +1,6 @@
 -- manifest: **A pessoa relacionada de um negócio aberto não abre outro negócio quando escreve (fatia 1 da #3669).** `fn_nascer_lead_da_conversa` devolvia NULL ("já existe") só quando o contato era o PRINCIPAL de um negócio aberto (`crm_leads.contact_id`). Quem estava ligado ao negócio como pessoa relacionada (`crm_lead_links`, `target_kind='contact'`, `link_kind='related'` — a lista "Pessoas relacionadas" do dossiê, #1506/#3083) ganhava um card novo na primeira mensagem, sem relação com o do cliente. Na venda B2B isso é o comprador, o gerente ou o fixo da loja escrevendo de outro número: medido numa carteira de ≈930 clientes, 36 cards "(2º número)" abertos à mão para contornar e 4 conversas num dia caindo em card novo. Agora a segunda consulta (só quando não há negócio aberto como principal) procura o contato entre as pessoas relacionadas de negócio ABERTO da mesma organização; achou, devolve NULL, e a ingestão registra `ja_existe` como já faz. Sem tabela nova: o vínculo é o que a #3083 já escreve. Sem índice novo: `idx_crm_lead_links_org_target (organization_id, target_kind, target_id)` cobre a busca. Assinatura, `security invoker`, advisory lock, moeda e grants INALTERADOS (cópia da 0400 com uma consulta a mais). Idempotente (`create or replace`); espelho idêntico no apêndice do `baseline.sql`, antes da VARREDURA anon. Prova em `tests/invariants/pessoa-relacionada-nao-abre-outro-negocio.test.ts`.
 --
--- 9043 — A PESSOA RELACIONADA DE UM NEGÓCIO ABERTO NÃO ABRE OUTRO NEGÓCIO.
+-- 9045 — A PESSOA RELACIONADA DE UM NEGÓCIO ABERTO NÃO ABRE OUTRO NEGÓCIO.
 --
 -- O que NÃO muda: o contato principal continua em `crm_leads.contact_id`; quem
 -- não usa "Pessoas relacionadas" não passa pela consulta nova com resultado
@@ -36,7 +36,7 @@ begin
      and status = 'open'
    limit 1;
 
-  -- 9043: o contato também pode ser uma PESSOA RELACIONADA de um negócio
+  -- 9045: o contato também pode ser uma PESSOA RELACIONADA de um negócio
   -- aberto (#3083) — o comprador, o gerente, o fixo da loja. Esse negócio já é
   -- a demanda dele; um card novo seria o "(2º número)" que a #3669 descreve.
   -- Segunda consulta, e não um OR na primeira: o caso comum (principal) segue

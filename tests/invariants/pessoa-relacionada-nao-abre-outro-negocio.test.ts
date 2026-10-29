@@ -4,7 +4,7 @@ import pg from "pg";
 import { emitAgentActivityForContact } from "@/lib/leads/agent-activity";
 
 /**
- * A PESSOA RELACIONADA ACHA O NEGÓCIO DO CLIENTE (#3669, fatia 1; migration 9043).
+ * A PESSOA RELACIONADA ACHA O NEGÓCIO DO CLIENTE (#3669, fatia 1; migration 9045).
  *
  * ─── O defeito, medido ──────────────────────────────────────────────────────
  *
@@ -43,18 +43,18 @@ const pool = new pg.Pool({
   max: 2,
 });
 
-const ORG = "d9043000-0000-4000-8000-000000000001";
-const OUTRA_ORG = "d9043000-0000-4000-8000-000000000002";
-const FUNIL = "d9043000-0000-4000-8000-000000000003";
-const ETAPA = "d9043000-0000-4000-8000-000000000004";
-const FUNIL_DE_LA = "d9043000-0000-4000-8000-000000000005";
-const ETAPA_DE_LA = "d9043000-0000-4000-8000-000000000006";
+const ORG = "d9045000-0000-4000-8000-000000000001";
+const OUTRA_ORG = "d9045000-0000-4000-8000-000000000002";
+const FUNIL = "d9045000-0000-4000-8000-000000000003";
+const ETAPA = "d9045000-0000-4000-8000-000000000004";
+const FUNIL_DE_LA = "d9045000-0000-4000-8000-000000000005";
+const ETAPA_DE_LA = "d9045000-0000-4000-8000-000000000006";
 
 /** Cada caso tem o próprio cliente, para um não depender da ordem do outro. */
 let sequencia = 0;
 function id(): string {
   sequencia += 1;
-  return `d9043000-0000-4000-8000-${String(1000 + sequencia).padStart(12, "0")}`;
+  return `d9045000-0000-4000-8000-${String(1000 + sequencia).padStart(12, "0")}`;
 }
 
 async function contato(org = ORG): Promise<string> {
@@ -120,8 +120,8 @@ async function ligacaoDe(pessoa: string) {
 beforeAll(async () => {
   await pool.query(
     `insert into organizations (id, slug, legal_name, display_name)
-     values ($1, 'org-9043', 'Distribuidora LTDA', 'Distribuidora'),
-            ($2, 'org-9043-vizinha', 'Vizinha LTDA', 'Vizinha')
+     values ($1, 'org-9045', 'Distribuidora LTDA', 'Distribuidora'),
+            ($2, 'org-9045-vizinha', 'Vizinha LTDA', 'Vizinha')
      on conflict (id) do nothing`,
     [ORG, OUTRA_ORG],
   );
@@ -131,7 +131,7 @@ beforeAll(async () => {
   ] as const) {
     await pool.query(
       `insert into crm_pipelines (id, organization_id, name, slug) values ($1, $2, 'Funil', $3)`,
-      [funil, org, `funil-9043-${sufixo}`],
+      [funil, org, `funil-9045-${sufixo}`],
     );
     await pool.query(
       `insert into crm_stages (id, organization_id, pipeline_id, name, slug, position)
@@ -145,7 +145,7 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe("fn_nascer_lead_da_conversa — a pessoa relacionada (9043)", () => {
+describe("fn_nascer_lead_da_conversa — a pessoa relacionada (9045)", () => {
   it("⭐ pessoa relacionada de negócio aberto NÃO abre outro card", async () => {
     const dono = await contato();
     const comprador = await contato();

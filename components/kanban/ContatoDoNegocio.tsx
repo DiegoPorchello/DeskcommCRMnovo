@@ -196,7 +196,7 @@ function PessoasRelacionadas({ leadId }: { leadId: string | null }) {
  * "+ telefone" (#3669, fatia 1): o cliente B2B fala por vários números — o
  * dono, o comprador, o fixo da loja — e cada número é um contato com a própria
  * conversa. Ligar o número ao negócio põe a pessoa na lista acima; a partir daí
- * a mensagem dela não abre outro card (`fn_nascer_lead_da_conversa`, 9043) e a
+ * a mensagem dela não abre outro card (`fn_nascer_lead_da_conversa`, 9045) e a
  * ligação dela cai neste negócio (`emitAgentActivityForContact`).
  *
  * Mesmo desenho do "Adicionar participante": fechado por padrão, e é a
