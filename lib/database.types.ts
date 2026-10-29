@@ -6679,6 +6679,9 @@ export type Database = {
           owner_user_id: string | null;
           pipeline_id: string;
           position_in_stage: number;
+          recurring_months: number | null;
+          recurring_period: "monthly" | null;
+          recurring_value_cents: number | null;
           retomado_de_lead_id: string | null;
           source: string;
           source_metadata: NonNullable<Json>;
@@ -6714,6 +6717,9 @@ export type Database = {
           owner_user_id?: string | null;
           pipeline_id: string;
           position_in_stage?: number;
+          recurring_months?: number | null;
+          recurring_period?: "monthly" | null;
+          recurring_value_cents?: number | null;
           retomado_de_lead_id?: string | null;
           source?: string;
           source_metadata?: NonNullable<Json>;
@@ -6748,6 +6754,9 @@ export type Database = {
           owner_user_id?: string | null;
           pipeline_id?: string;
           position_in_stage?: number;
+          recurring_months?: number | null;
+          recurring_period?: "monthly" | null;
+          recurring_value_cents?: number | null;
           retomado_de_lead_id?: string | null;
           source?: string;
           source_metadata?: NonNullable<Json>;
@@ -13092,6 +13101,7 @@ export type Database = {
           dispatched_at: string;
           disputa_de_banco: boolean | null;
           finished_at: string | null;
+          force_requested: boolean;
           from_version: string;
           id: string;
           last_step: string | null;
@@ -13107,6 +13117,7 @@ export type Database = {
           dispatched_at?: string;
           disputa_de_banco?: boolean | null;
           finished_at?: string | null;
+          force_requested?: boolean;
           from_version?: string;
           id?: string;
           last_step?: string | null;
@@ -13121,6 +13132,7 @@ export type Database = {
           dispatched_at?: string;
           disputa_de_banco?: boolean | null;
           finished_at?: string | null;
+          force_requested?: boolean;
           from_version?: string;
           id?: string;
           last_step?: string | null;
@@ -13144,6 +13156,7 @@ export type Database = {
           id: number;
           latest_version: string;
           off_release: boolean;
+          runtime_confirmation: Json | null;
           update_requested_at: string | null;
           update_requested_by: string | null;
           updated_at: string;
@@ -13159,6 +13172,7 @@ export type Database = {
           id?: number;
           latest_version?: string;
           off_release?: boolean;
+          runtime_confirmation?: Json | null;
           update_requested_at?: string | null;
           update_requested_by?: string | null;
           updated_at?: string;
@@ -13173,6 +13187,7 @@ export type Database = {
           id?: number;
           latest_version?: string;
           off_release?: boolean;
+          runtime_confirmation?: Json | null;
           update_requested_at?: string | null;
           update_requested_by?: string | null;
           updated_at?: string;
@@ -15913,6 +15928,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      fn_vaga_ao_reviver_canal: { Args: { p_org: string; p_canal: string }; Returns: undefined };
       fn_vocabulario_de_tags: {
         Args: { p_org: string };
         Returns: {
