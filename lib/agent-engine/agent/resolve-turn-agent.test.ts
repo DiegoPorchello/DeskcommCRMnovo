@@ -92,6 +92,7 @@ function makeDeps(overrides: {
   classifyIntent?: ReturnType<typeof vi.fn>;
   consultarJev?: ReturnType<typeof vi.fn>;
   temIaDeSempre?: ReturnType<typeof vi.fn>;
+  agenteDaCampanha?: ReturnType<typeof vi.fn>;
 }) {
   return {
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -102,6 +103,7 @@ function makeDeps(overrides: {
     consultarJev: overrides.consultarJev ?? jevFalso().consultarJev,
     // A empresa tem a IA de sempre, salvo o caso que prova o contrário (decisão B).
     temIaDeSempre: overrides.temIaDeSempre ?? vi.fn().mockResolvedValue(true),
+    ...(overrides.agenteDaCampanha ? { agenteDaCampanha: overrides.agenteDaCampanha } : {}),
   } as never;
 }
 
@@ -239,14 +241,25 @@ describe('resolveTurnAgent', () => {
     expect(out.config?.agentId).toBe('agent-vendas');
   });
 
-  it('9. erro inesperado no router (ex.: DB fora do ar) nunca derruba o turno — cai no loadPublishedAgentConfig atual', async () => {
-    const loadActiveRouter = vi.fn().mockRejectedValue(new Error('db timeout'));
+  it('9. erro DEPOIS de o router carregar (sem regra por remetente) não derruba o turno — cai no loadPublishedAgentConfig atual', async () => {
+    const loadActiveRouter = vi.fn().mockResolvedValue(router());
     const loadPublishedAgentConfig = vi.fn().mockResolvedValue(fakeConfig('agent-sessao'));
+    const agenteDaCampanha = vi.fn().mockRejectedValue(new Error('db timeout'));
     const out = await resolveTurnAgent({} as never, {} as never,
       { ...baseInput, signal: 'oi', stickyAgentId: null, stickyIntent: null },
-      makeDeps({ loadActiveRouter, loadPublishedAgentConfig }));
+      makeDeps({ loadActiveRouter, loadPublishedAgentConfig, agenteDaCampanha }));
+    expect(agenteDaCampanha).toHaveBeenCalled();
     expect(out.outcome).toBe('classifier_failed');
     expect(out.config?.agentId).toBe('agent-sessao');
+  });
+
+  it('9b. falha ao CARREGAR o router (ex.: DB fora do ar) não cai no agente da sessão — sem saber se há regra por remetente, o turno não segue', async () => {
+    const loadActiveRouter = vi.fn().mockRejectedValue(new Error('db timeout'));
+    const loadPublishedAgentConfig = vi.fn().mockResolvedValue(fakeConfig('agent-sessao'));
+    await expect(resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'oi', stickyAgentId: null, stickyIntent: null },
+      makeDeps({ loadActiveRouter, loadPublishedAgentConfig }))).rejects.toThrow('db timeout');
+    expect(loadPublishedAgentConfig).not.toHaveBeenCalled();
   });
 
   it('10. sticky + classificador devolve null → mantém o agente sticky (review T4 finding 1)', async () => {
@@ -852,7 +865,7 @@ describe('identidade antes de intenção e sticky', () => {
     ['+5511888887777', publico],
     [null, publico],
   ])('identifica %s sem pedir decisão ao modelo', async (phone, expected) => {
-    const db = { query: vi.fn().mockResolvedValue({ rows: [{ phone_number: phone }] }) } as unknown as Parameters<typeof resolveTurnAgent>[0];
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ external_id: phone ? `false_${phone.slice(1)}@c.us_3EB0` : null }] }) } as unknown as Parameters<typeof resolveTurnAgent>[0];
     const classifyIntent = vi.fn();
     const consultarJev = vi.fn();
     const deps = makeDeps({ classifyIntent, consultarJev, loadActiveRouter: vi.fn().mockResolvedValue(router({ senderRoutes: rules, fallbackAgentId: publico })), loadPublishedAgentConfigById: idAwareLoader() });
@@ -862,7 +875,7 @@ describe('identidade antes de intenção e sticky', () => {
     expect(consultarJev).not.toHaveBeenCalled();
   });
   it('não abre genérico se o agente reservado estiver indisponível', async () => {
-    const db = { query: vi.fn().mockResolvedValue({ rows: [{ phone_number: '+5511999998888' }] }) } as unknown as Parameters<typeof resolveTurnAgent>[0];
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ external_id: 'false_5511999998888@c.us_3EB0' }] }) } as unknown as Parameters<typeof resolveTurnAgent>[0];
     const loadPublishedAgentConfig = vi.fn();
     const deps = makeDeps({ loadPublishedAgentConfig, loadActiveRouter: vi.fn().mockResolvedValue(router({ senderRoutes: rules, fallbackAgentId: publico })), loadPublishedAgentConfigById: vi.fn().mockResolvedValue(null) });
     await expect(resolveTurnAgent(db, cfg, { ...baseInput, signal: 'oi', stickyAgentId: null, stickyIntent: null }, deps)).rejects.toThrow('unpublished');

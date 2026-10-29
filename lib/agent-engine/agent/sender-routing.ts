@@ -1,8 +1,29 @@
 import type pg from "pg";
 import { senderRoutesSchema, telefoneDoRemetente } from "@/lib/ai/agents/sender-routes";
+import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
+import { chatIdFromWaMessageId } from "@/lib/waha/message-id";
 import type { LoadedRouter } from "./router-config";
 
-/** Identidade do cadastro vinculado à conversa, nunca inferida do texto/prompt. */
+/**
+ * O telefone do chat que o WAHA gravou na entrada, ou `null`.
+ *
+ * O id da mensagem recebida é composto pelo próprio canal
+ * (`{fromMe}_{chatId}_{id}`) e é ele que diz de qual chat a mensagem veio.
+ * `contacts.phone_number` não serve: é campo da ficha, editável por quem atende
+ * e preenchível por proposta de dado, e a regra por remetente escolhe agente
+ * com ferramentas que o atendimento público não tem.
+ *
+ * Só chat de número (`@c.us`/`@s.whatsapp.net`). `@lid` não carrega telefone e
+ * cai no agente público — falha fechada. A forma canônica (nono dígito) é a
+ * mesma que a ingestão grava na ficha.
+ */
+export function telefoneDoCanal(externalId: string | null | undefined): string | null {
+  const chat = externalId ? chatIdFromWaMessageId(externalId) : null;
+  if (!chat || !/^\d+@(c\.us|s\.whatsapp\.net)$/.test(chat)) return null;
+  return telefoneDoRemetente(canonicalPhoneBR(`+${chat.slice(0, chat.indexOf("@"))}`));
+}
+
+/** Identidade gravada pelo canal na entrada, nunca a ficha nem o texto/prompt. */
 export async function agentePorRemetente(
   db: Pick<pg.Pool, "query">,
   input: {
@@ -19,13 +40,17 @@ export async function agentePorRemetente(
   if (!routes.length) return { agentId: null, reserved };
   if (!router.fallbackAgentId || reserved.has(router.fallbackAgentId))
     throw new Error("sender_routes_require_public_fallback");
-  const { rows } = await db.query<{ phone_number: string | null }>(
-    `select ct.phone_number from conversations cv
+  const { rows } = await db.query<{ external_id: string | null }>(
+    `select m.external_id from messages m
+     join conversations cv on cv.organization_id=m.organization_id and cv.id=m.conversation_id
      join contacts ct on ct.organization_id=cv.organization_id and ct.id=cv.contact_id
-     where cv.organization_id=$1 and cv.id=$2 and cv.channel_session_id=$3
-       and cv.channel='whatsapp' and not cv.is_group and not ct.is_anonymized`,
+     where m.organization_id=$1 and m.conversation_id=$2 and m.channel_session_id=$3
+       and cv.channel_session_id=$3 and cv.channel='whatsapp' and not cv.is_group
+       and not ct.is_anonymized
+       and m.direction='inbound' and m.sent_via='external_device' and m.external_id is not null
+     order by m.sent_at desc, m.created_at desc, m.id desc limit 1`,
     [input.tenantId, input.conversationId, input.channelSessionId],
   );
-  const phone = telefoneDoRemetente(rows[0]?.phone_number);
-  return { agentId: routes.find((r) => r.phone === phone)?.agent_id ?? null, reserved };
+  const phone = telefoneDoCanal(rows[0]?.external_id);
+  return { agentId: phone ? (routes.find((r) => r.phone === phone)?.agent_id ?? null) : null, reserved };
 }

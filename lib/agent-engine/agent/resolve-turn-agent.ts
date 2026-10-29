@@ -229,9 +229,14 @@ export async function resolveTurnAgent(
   const _classifyIntent = deps.classifyIntent ?? classifyIntent;
   const _consultarJev = deps.consultarJev ?? consultarJevNoRoteador;
 
+  // As duas marcas decidem o `catch`: sem o roteador carregado não se sabe se
+  // há regra por remetente, e cair no agente da sessão aí seria atender pelo
+  // agente errado justamente quando a regra existe.
+  let roteadorCarregado = false;
   let temRegrasDeRemetente = false;
   try {
     const router = await _loadActiveRouter(db, input.tenantId, input.channelSessionId);
+    roteadorCarregado = true;
     temRegrasDeRemetente = router?.senderRoutes !== undefined &&
       (!Array.isArray(router.senderRoutes) || router.senderRoutes.length > 0);
     if (router && temRegrasDeRemetente) {
@@ -462,7 +467,7 @@ export async function resolveTurnAgent(
       error: err instanceof Error ? err.message : String(err),
     });
     // Erro de identidade não pode abrir o atendimento genérico com ferramentas.
-    if (temRegrasDeRemetente) throw err;
+    if (!roteadorCarregado || temRegrasDeRemetente) throw err;
     return {
       config: await _loadAgentBySession(db, input.tenantId, input.channelSessionId),
       routerId: null, intentName: null, confidence: null, outcome: 'classifier_failed',
