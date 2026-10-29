@@ -8,6 +8,7 @@ import { PreviaDaDefinicao } from "./PreviaDaDefinicao";
 import {
   contarVariaveis,
   IDIOMAS_DA_DEFINICAO,
+  idiomaInicialDaDefinicao,
   lerConteudo,
   LIMITE_BOTOES,
   LIMITE_CORPO,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/channels/template-conteudo";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
+import { useLocaleDaOrgAtiva } from "@/hooks/auth/AuthProvider";
 import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 
 /**
@@ -82,7 +84,8 @@ export function FormularioDaDefinicao({
   const inicial = editando ? paraFormulario(lerConteudo(editando.components)) : null;
 
   const [nome, setNome] = useState(editando?.name ?? "");
-  const [idioma, setIdioma] = useState(editando?.language ?? "es");
+  const localeDaOrg = useLocaleDaOrgAtiva();
+  const [idioma, setIdioma] = useState(editando?.language ?? idiomaInicialDaDefinicao(localeDaOrg));
   const [categoria, setCategoria] = useState(editando?.category ?? "UTILITY");
   const [corpo, setCorpo] = useState(inicial?.corpo ?? "");
   const [rodape, setRodape] = useState(inicial?.rodape ?? "");

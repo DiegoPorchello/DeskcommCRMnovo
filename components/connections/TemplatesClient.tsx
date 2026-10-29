@@ -255,12 +255,12 @@ export function TemplatesClient() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="templates-root">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="min-w-0 break-words text-sm text-muted-foreground">
           {t("Espelho da conta")} <span className="font-mono text-xs">{waba}</span> ·{" "}
           {templates.length} {t("template(s)")}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={sincronizar} disabled={sync.isPending} data-testid="btn-sync">
             {sync.isPending ? t("Sincronizando…") : t("Sincronizar com a Meta")}
           </Button>
@@ -364,22 +364,25 @@ export function TemplatesClient() {
 
               {/* Editar e apagar pela TELA: era o que faltava para o canal
                   oficial direto. A categoria viaja junto porque é ela que o
-                  formulário mostra travada. */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => abrirEdicao(tpl)}>
-                  <PencilSimple size={14} className="mr-1.5" aria-hidden />
-                  {t("Editar")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setApagando({ name: tpl.name, language: tpl.language, usos: null })}
-                >
-                  <Trash size={14} className="mr-1.5" aria-hidden />
-                  {t("Apagar")}
-                </Button>
-              </div>
+                  formulário mostra travada. Só no modelo DESTA conexão: o do
+                  parceiro também está no espelho, e a rota oficial o recusa. */}
+              {tpl.daConexao ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => abrirEdicao(tpl)}>
+                    <PencilSimple size={14} className="mr-1.5" aria-hidden />
+                    {t("Editar")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setApagando({ name: tpl.name, language: tpl.language, usos: null })}
+                  >
+                    <Trash size={14} className="mr-1.5" aria-hidden />
+                    {t("Apagar")}
+                  </Button>
+                </div>
+              ) : null}
             </Card>
           ))}
         </div>

@@ -39,6 +39,8 @@ export interface TemplateView {
   components: unknown[];
   /** Links de mídia salvos no modelo — o painel da janela fechada pré-preenche com eles. */
   savedValues: Record<string, string>;
+  /** Da conta oficial desta conexão: só estes têm Editar/Apagar (o espelho é da organização). */
+  daConexao: boolean;
 }
 
 export interface TemplatesPayload {

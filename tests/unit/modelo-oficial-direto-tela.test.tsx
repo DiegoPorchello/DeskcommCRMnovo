@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as Auth from "@/hooks/auth/AuthProvider";
+
 /**
  * A TELA DO CANAL OFICIAL DIRETO — criar, editar e apagar modelo pelo CRM
  * (#3635 fatia 1).
@@ -25,6 +27,12 @@ const h = vi.hoisted(() => ({
   sync: vi.fn(),
   salvar: vi.fn(),
   toasts: [] as string[],
+  localeDaOrg: null as string | null,
+}));
+
+vi.mock("@/hooks/auth/AuthProvider", async (original) => ({
+  ...(await original<typeof Auth>()),
+  useLocaleDaOrgAtiva: () => h.localeDaOrg,
 }));
 
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: h.post } }));
@@ -55,6 +63,24 @@ vi.mock("@/hooks/channels/useTemplates", () => ({
             previews: [] as unknown[],
             savedValues: {},
             components: [{ type: "BODY", text: "Olá {{1}}, seu pedido saiu." }],
+            daConexao: true,
+          },
+          {
+            // Do espelho da organização, mas da conexão do PARCEIRO.
+            name: "pedido_do_parceiro",
+            language: "es",
+            status: "APPROVED",
+            category: "UTILITY",
+            rejectedReason: null,
+            qualityScore: "GREEN",
+            parameterFormat: "POSITIONAL",
+            contractHash: "h2",
+            syncedAt: "2026-10-01T00:00:00.000Z",
+            slots: [],
+            previews: [] as unknown[],
+            savedValues: {},
+            components: [{ type: "BODY", text: "Hola." }],
+            daConexao: false,
           },
         ],
       },
@@ -69,7 +95,10 @@ import { ApiError } from "@/lib/api/types";
 
 // Cada caso mede a PRÓPRIA chamada: sem isto, o `calls[0]` de um caso é a
 // chamada do anterior e a asserção passa (ou falha) pelo motivo errado.
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  h.localeDaOrg = null;
+});
 
 function montar() {
   const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -104,7 +133,9 @@ describe("tela do canal oficial direto — gestão de modelo", () => {
     const [url, corpo] = h.post.mock.calls[0]!;
     // A MESMA rota do "Sincronizar": é ela que resolve a conta pela sessão.
     expect(url).toBe("/api/v1/channels/templates");
-    expect(corpo).toMatchObject({ acao: "criar", name: "pedido_saiu", language: "es", category: "UTILITY" });
+    // O idioma nasce no da organização — sem organização ativa, o padrão do
+    // produto (pt-BR), e não o "es" herdado da tela do parceiro.
+    expect(corpo).toMatchObject({ acao: "criar", name: "pedido_saiu", language: "pt_BR", category: "UTILITY" });
     const body = (corpo.components as { type: string; text: string; example?: unknown }[]).find(
       (c) => c.type === "BODY",
     );
@@ -169,5 +200,48 @@ describe("tela do canal oficial direto — gestão de modelo", () => {
     expect(within(caixa).getByText("Follow-up «Remarketing»")).toBeTruthy();
     // E o botão passa a ser o de confirmar assim mesmo.
     expect(within(caixa).getByRole("button", { name: "Apagar assim mesmo" })).toBeTruthy();
+  });
+
+  it("⭐ o idioma do modelo novo nasce no idioma da organização", () => {
+    // Nem o padrão (pt_BR) nem o "es" herdado: só passa se ler a organização.
+    h.localeDaOrg = "en";
+    montar();
+
+    fireEvent.click(screen.getByTestId("btn-criar-modelo"));
+    const form = document.querySelector('[data-formulario-do-modelo="criar"]') as HTMLElement;
+    expect((within(form).getByLabelText("Idioma") as HTMLSelectElement).value).toBe("en");
+  });
+
+  it("⭐ modelo de OUTRA conexão aparece sem Editar nem Apagar", () => {
+    montar();
+
+    const cards = screen.getAllByTestId("template-card");
+    expect(cards).toHaveLength(2);
+    const [daConexao, doParceiro] = cards as [HTMLElement, HTMLElement];
+    expect(within(daConexao).getByRole("button", { name: "Editar" })).toBeTruthy();
+    expect(within(daConexao).getByRole("button", { name: "Apagar" })).toBeTruthy();
+    expect(within(doParceiro).queryByRole("button", { name: "Editar" })).toBeNull();
+    expect(within(doParceiro).queryByRole("button", { name: "Apagar" })).toBeNull();
+  });
+
+  it("a linha de ações quebra em tela estreita em vez de estourar a largura", () => {
+    montar();
+    // 375px: "Sincronizar com a Meta" + "Criar modelo" ao lado do texto empurrava
+    // o botão até 463px. A prova de verdade é medida na tela; isto prende as classes.
+    const acoes = screen.getByTestId("btn-criar-modelo").parentElement as HTMLElement;
+    expect(acoes.className).toContain("flex-wrap");
+    expect((acoes.parentElement as HTMLElement).className).toContain("flex-wrap");
+  });
+});
+
+describe("idioma inicial do modelo", () => {
+  it("segue o idioma da organização e cai no padrão do produto fora da lista", async () => {
+    const { idiomaInicialDaDefinicao } = await import("@/lib/channels/template-conteudo");
+    expect(idiomaInicialDaDefinicao("pt-BR")).toBe("pt_BR");
+    expect(idiomaInicialDaDefinicao("es")).toBe("es");
+    expect(idiomaInicialDaDefinicao("es-PY")).toBe("es");
+    expect(idiomaInicialDaDefinicao("en")).toBe("en");
+    expect(idiomaInicialDaDefinicao("zh-CN")).toBe("pt_BR");
+    expect(idiomaInicialDaDefinicao(null)).toBe("pt_BR");
   });
 });

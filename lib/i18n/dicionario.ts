@@ -1915,6 +1915,9 @@ export const DICIONARIO: Traducoes = {
       es: "Sin ella, ese paso del seguimiento se saltea y el agente no puede enviarla. Cambiala antes, o eliminala igual.",
     },
   "Apagar assim mesmo": { es: "Eliminar igual" },
+  "Este modelo não é da conta oficial desta conexão.": {
+    es: "Esta plantilla no es de la cuenta oficial de esta conexión.",
+  },
   "Este modelo está em uso. Confirme para apagar assim mesmo.": {
     es: "Esta plantilla está en uso. Confirmá para eliminarla igual.",
   },

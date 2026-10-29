@@ -32,7 +32,13 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
-import { acaoApagarSchema, acaoEditarSchema, executarGestao } from "@/lib/channels/gestao-de-modelos";
+import {
+  acaoApagarSchema,
+  acaoEditarSchema,
+  executarGestao,
+  linhasDoModeloNaConexao,
+  type EscopoDaGestao,
+} from "@/lib/channels/gestao-de-modelos";
 import { resolveMetaCreds } from "@/lib/channels/meta/credentials";
 import { metaSessionForOrg } from "@/lib/channels/meta/session";
 import { metaCloudTemplateOps } from "@/lib/channels/meta/templates";
@@ -89,6 +95,12 @@ export interface TemplateView {
    * `template_values`. O painel da janela fechada pré-preenche com eles.
    */
   savedValues: Record<string, string>;
+  /**
+   * O modelo é DA CONTA OFICIAL desta conexão — o único que esta tela pode
+   * editar ou apagar. O espelho é da organização inteira: o modelo do parceiro
+   * aparece na lista, mas editar/apagar aqui miraria a WABA oficial pelo nome.
+   */
+  daConexao: boolean;
 }
 
 /** Textos com placeholder, achatados (inclui os de dentro de card de carrossel). */
@@ -148,7 +160,7 @@ export async function GET(): Promise<NextResponse> {
   const { data, error } = await admin
     .from("meta_templates")
     .select(
-      "name, language, status, category, rejected_reason, quality_score, parameter_format, contract_hash, components, synced_at, saved_values",
+      "name, language, status, category, rejected_reason, quality_score, parameter_format, contract_hash, components, synced_at, saved_values, channel_session_id, waba_id",
     )
     .eq("organization_id", r.orgId)
     .order("status")
@@ -197,6 +209,9 @@ export async function GET(): Promise<NextResponse> {
         const r = mesclarValoresSalvos(contrato, (row.saved_values ?? {}) as Record<string, unknown>, {});
         return r.ok ? r.valores : {};
       })(),
+      // A mesma régua de `linhasDoModeloNaConexao`: linha oficial = sem conexão
+      // e com a WABA desta sessão.
+      daConexao: !!sessao?.wabaId && row.channel_session_id === null && row.waba_id === sessao.wabaId,
     };
   });
 
@@ -288,12 +303,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (corpo.acao === "editar" || corpo.acao === "apagar") {
-      const gestao = await executarGestao(
-        metaCloudTemplateOps,
-        createAdminClient(),
-        { orgId: r.orgId, sessionId: sessao.id, sessionRef: sessao.phoneNumberId ?? "" },
-        corpo,
-      );
+      const escopo: EscopoDaGestao = {
+        orgId: r.orgId,
+        sessionId: sessao.id,
+        sessionRef: sessao.phoneNumberId ?? "",
+        wabaOficial: sessao.wabaId,
+      };
+      // A plataforma acha o modelo pelo NOME dentro da WABA oficial. Um homônimo
+      // de outra conexão (o parceiro) listado no espelho não pode virar edição —
+      // ou apagamento, que é irreversível — na conta oficial.
+      if ((await linhasDoModeloNaConexao(createAdminClient(), escopo, corpo)).length === 0) {
+        return fail("not_found", t("Este modelo não é da conta oficial desta conexão."), 404, { requestId });
+      }
+      const gestao = await executarGestao(metaCloudTemplateOps, createAdminClient(), escopo, corpo);
       if (!gestao.ok) {
         // Apagar um modelo em uso faria o passo do follow-up pular e o agente
         // errar o envio, em silêncio. A tela mostra ONDE e pede a confirmação.

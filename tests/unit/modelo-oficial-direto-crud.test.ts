@@ -42,6 +42,7 @@ const h = vi.hoisted(() => ({
   credsParceiro: vi.fn(),
   consultas: [] as string[],
   apagados: [] as string[],
+  linhasApagadas: [] as string[],
   espelho: [] as Record<string, unknown>[],
   tabelas: {} as Record<string, unknown[]>,
 }));
@@ -64,31 +65,39 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (tabela: string) => {
       h.consultas.push(tabela);
+      // O espelho OBEDECE aos filtros: um duble que devolve toda linha a qualquer
+      // `eq` deixava passar o apagar que filtrava pela coluna errada (as linhas do
+      // canal oficial têm `channel_session_id` nulo) e o modelo de OUTRA conexão.
+      const filtros: ((r: Record<string, unknown>) => boolean)[] = [];
+      let apagando = false;
       const q = {
         select: () => q,
-        eq: () => q,
-        in: () => q,
+        eq: (c: string, v: unknown) => (filtros.push((r) => r[c] === v), q),
+        is: (c: string, v: unknown) => (filtros.push((r) => (r[c] ?? null) === v), q),
+        in: (c: string, vs: unknown[]) => (filtros.push((r) => vs.includes(r[c])), q),
         not: () => q,
         order: () => q,
         limit: () => q,
         delete: () => {
           h.apagados.push(tabela);
+          apagando = true;
           return q;
         },
         maybeSingle: async () => ({ data: null, error: null }),
         upsert: async () => ({ error: null }),
-        then: (ok: (r: unknown) => unknown) =>
-          ok({
-            data: tabela === "meta_templates" ? h.espelho : (h.tabelas[tabela] ?? []),
-            error: null,
-          }),
+        then: (ok: (r: unknown) => unknown) => {
+          if (tabela !== "meta_templates") return ok({ data: h.tabelas[tabela] ?? [], error: null });
+          const linhas = h.espelho.filter((r) => filtros.every((f) => f(r)));
+          if (apagando) h.linhasApagadas.push(...linhas.map((r) => String(r.id)));
+          return ok({ data: linhas, error: null });
+        },
       };
       return q;
     },
   }),
 }));
 
-import { POST } from "@/app/api/v1/channels/templates/route";
+import { GET, POST } from "@/app/api/v1/channels/templates/route";
 import { graphPartnerTemplateOps } from "@/lib/channels/graph-parceiro/templates";
 
 const URL_ROTA = "https://crm.test/api/v1/channels/templates";
@@ -115,6 +124,27 @@ const SESSAO = {
   phoneNumberId: "PN-DA-SESSAO",
 };
 
+/**
+ * As duas linhas do espelho com o MESMO nome e idioma, como o banco as grava: a
+ * do canal oficial chaveia pela WABA e deixa a conexão nula
+ * (`lib/channels/meta/template-sync.ts`); a do parceiro grava a conexão dele e a
+ * conta do provedor no lugar da WABA (`partner/templates`).
+ */
+const LINHA_OFICIAL = {
+  id: "tpl-oficial",
+  organization_id: "org-da-sessao",
+  channel_session_id: null,
+  waba_id: "WABA-DA-SESSAO",
+  ...ALVO,
+};
+const LINHA_DO_PARCEIRO = {
+  id: "tpl-parceiro",
+  organization_id: "org-da-sessao",
+  channel_session_id: "sess-parceiro",
+  waba_id: "WABA-DO-PARCEIRO",
+  ...ALVO,
+};
+
 const fetchOk = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 /** A chamada que saiu de verdade, como URL + headers + corpo. */
@@ -127,6 +157,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.consultas = [];
   h.apagados = [];
+  h.linhasApagadas = [];
   h.espelho = [];
   h.tabelas = {};
   h.role.mockResolvedValue(AUTORIZADO);
@@ -229,6 +260,7 @@ describe("canal oficial direto — criar", () => {
 
 describe("canal oficial direto — editar", () => {
   it("⭐ edita a VARIANTE: resolve o id por nome+idioma e faz POST no nó dela", async () => {
+    h.espelho = [LINHA_OFICIAL];
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -267,7 +299,7 @@ describe("canal oficial direto — editar", () => {
 
 describe("canal oficial direto — apagar", () => {
   it("⭐ apaga UMA variante (hsm_id) e tira a linha do espelho", async () => {
-    h.espelho = [{ id: "tpl-1" }];
+    h.espelho = [LINHA_OFICIAL, LINHA_DO_PARCEIRO];
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(fetchOk({ data: [{ id: "5400801403478858", name: "boas_vindas", language: "pt_BR" }] }))
@@ -285,6 +317,9 @@ describe("canal oficial direto — apagar", () => {
     expect(remocao.url).toContain("/WABA-DA-SESSAO/message_templates?name=boas_vindas&hsm_id=5400801403478858");
     expect(remocao.init.method).toBe("DELETE");
     expect(h.apagados).toContain("meta_templates");
+    // Sai do espelho a linha DA CONTA OFICIAL — e só ela: a do parceiro, com o
+    // mesmo nome, é de outra conta e continua existindo lá.
+    expect(h.linhasApagadas).toEqual(["tpl-oficial"]);
     expect(h.audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "template.deleted", actorUserId: "u-1" }),
     );
@@ -292,9 +327,9 @@ describe("canal oficial direto — apagar", () => {
   });
 
   it("apagar modelo EM USO responde 409 com onde ele está, e não apaga", async () => {
-    h.espelho = [{ id: "tpl-1" }];
+    h.espelho = [LINHA_OFICIAL];
     h.tabelas.followup_flow_pointers = [
-      { name: "Remarketing", active_version_id: null, draft_graph: { t: "tpl-1" } },
+      { name: "Remarketing", active_version_id: null, draft_graph: { t: "tpl-oficial" } },
     ];
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
@@ -306,6 +341,48 @@ describe("canal oficial direto — apagar", () => {
     expect(j.error.details.usos).toEqual(["Follow-up «Remarketing»"]);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(h.apagados).not.toContain("meta_templates");
+  });
+});
+
+describe("canal oficial direto — só o modelo DESTA conexão", () => {
+  // O espelho é da organização inteira, e a aba oficial o lista assim. Um modelo
+  // da conexão do PARCEIRO aparece ali — e editar/apagar pela rota oficial mira
+  // a WABA oficial pelo NOME: apagar é irreversível na plataforma.
+  it("⭐ editar modelo de OUTRA conexão é recusado e não toca a plataforma", async () => {
+    h.espelho = [LINHA_DO_PARCEIRO];
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const res = await post({ acao: "editar", ...ALVO, components: CORPO });
+
+    expect(res.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(h.audit).not.toHaveBeenCalled();
+    expect(h.sync).not.toHaveBeenCalled();
+  });
+
+  it("⭐ apagar modelo de OUTRA conexão é recusado, mesmo confirmado", async () => {
+    h.espelho = [LINHA_DO_PARCEIRO];
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const res = await post({ acao: "apagar", ...ALVO, confirmado: true });
+
+    expect(res.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(h.apagados).not.toContain("meta_templates");
+    expect(h.audit).not.toHaveBeenCalled();
+  });
+
+  it("a lista marca quais modelos são DESTA conexão (os únicos com Editar/Apagar)", async () => {
+    h.espelho = [
+      { ...LINHA_OFICIAL, status: "APPROVED", components: [], parameter_format: "POSITIONAL" },
+      { ...LINHA_DO_PARCEIRO, status: "APPROVED", components: [], parameter_format: "POSITIONAL" },
+    ];
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    const j = (await res.json()) as { data: { templates: { daConexao: boolean }[] } };
+    expect(j.data.templates.map((t) => t.daConexao)).toEqual([true, false]);
   });
 });
 
