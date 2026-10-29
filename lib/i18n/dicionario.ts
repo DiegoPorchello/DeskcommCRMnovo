@@ -2998,6 +2998,14 @@ export const DICIONARIO: Traducoes = {
   "A IA escolhe a hora": { es: "La IA elige el momento" },
   "Como calcular a espera": { es: "Cómo calcular la espera" },
   "Duração (minutos)": { es: "Duración (minutos)" },
+  // Duração escolhida na marcação (#3709) — o campo do painel, com o valor do
+  // serviço como padrão.
+  "O padrão é a duração do serviço. Mude se este atendimento precisar de mais ou menos tempo.": {
+    es: "El valor por defecto es la duración del servicio. Cámbialo si esta atención necesita más o menos tiempo.",
+  },
+  "Escolha uma duração entre 5 e 1440 minutos.": {
+    es: "Elige una duración entre 5 y 1440 minutos.",
+  },
   "Mínimo (min)": { es: "Mínimo (min)" },
   "Máximo (min)": { es: "Máximo (min)" },
   "Orientação (opcional)": { es: "Orientación (opcional)" },
