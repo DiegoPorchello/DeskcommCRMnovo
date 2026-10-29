@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const { data: comanda } = await supabase
     .from("sales")
-    .select("id, status, number, attendant_user_id")
+    .select("id, status, number, attendant_user_id, calendar_appointments(owner_user_id)")
     .eq("id", id)
     .maybeSingle();
   if (!comanda) return fail("not_found", "Comanda não encontrada.", 404, { requestId });
@@ -63,9 +63,15 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return fail("conflict", "Só comanda aberta recebe item.", 409, { requestId });
   }
 
-  // Sem atendente no corpo, vale o da comanda (quem a abriu). Item sem atendente
-  // não gera comissão em `fn_finalizar_comanda`, e a tela do balcão não o manda.
-  const atendente = lido.data.attendant_user_id ?? comanda.attendant_user_id ?? null;
+  // Sem atendente no corpo, vale o dono do agendamento da comanda e, sem ele, o
+  // da comanda (quem a abriu). Item sem atendente não gera comissão em
+  // `fn_finalizar_comanda`, e a tela do balcão não o manda. O dono vem antes de
+  // quem abriu porque a recepção abre a comanda do serviço que outro prestou.
+  const agendamento = Array.isArray(comanda.calendar_appointments)
+    ? comanda.calendar_appointments[0]
+    : comanda.calendar_appointments;
+  const atendente =
+    lido.data.attendant_user_id ?? agendamento?.owner_user_id ?? comanda.attendant_user_id ?? null;
 
   const percent = await percentualDoItem(supabase, org, {
     attendantUserId: atendente,
