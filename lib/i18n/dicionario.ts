@@ -18033,6 +18033,14 @@ export const DICIONARIO: Traducoes = {
   "Baixar arquivo": {
     es: "Descargar archivo",
   },
+  // O bloco de arquivos do card do quadro (#2829): "0 + Nenhum arquivo anexado"
+  // no campo vazio, e o nome de cada arquivo é o rótulo do link.
+  "Nenhum arquivo anexado": {
+    es: "Ningún archivo adjunto",
+  },
+  "Abrir arquivo": {
+    es: "Abrir archivo",
+  },
   "Pré-visualização indisponível para este formato.": {
     es: "Vista previa no disponible para este formato.",
   },
