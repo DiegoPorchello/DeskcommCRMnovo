@@ -150,7 +150,7 @@
               }
             }
           ],
-          "texto": "Clique no cartão para abrir o roteador. Em \"Identificação\" ficam o nome, o número e a chave que liga e desliga. Em \"Intenções\", à direita, você diz que assuntos ele reconhece e qual agente atende cada um. Mais abaixo, à esquerda, vêm o modelo de IA que lê as mensagens, o agente de reserva para quando nenhuma intenção serve e um teste. Nada do que você muda vale antes de clicar em \"Salvar\".",
+          "texto": "Clique no cartão para abrir o roteador. Em \"Identificação\" ficam o nome, o número e a chave que liga e desliga. Em \"Intenções\", à direita, você diz que assuntos ele reconhece e qual agente atende cada um. Mais abaixo, à esquerda, vêm \"Agente por número do remetente\" (para mandar certos telefones sempre para um agente, antes da IA decidir), o modelo de IA que lê as mensagens, o agente de reserva para quando nenhuma intenção serve e um teste. Nada do que você muda vale antes de clicar em \"Salvar\".",
           "dica": "Um gerente também abre os roteadores, mas só para ver e testar: os campos ficam travados e os botões \"Novo roteador\", \"Intenção\", \"Salvar\" e \"Excluir roteador\" não aparecem. Só o administrador cria, muda e exclui roteadores.",
           "destaques": [
             {

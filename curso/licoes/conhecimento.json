@@ -152,7 +152,7 @@
         {
           "id": "p7",
           "titulo": "O selo de cada material",
-          "texto": "O selo colorido no canto do cartão diz em que pé está o material. \"O agente já sabe\", em verde: está preparado e o agente encontra. \"Não entrou\", em vermelho: a preparação falhou, e o motivo está em \"Por que não entrou\". \"Esperando a chave\", em laranja: o material foi guardado, mas só será preparado quando houver uma chave valendo.",
+          "texto": "O selo colorido no canto do cartão diz em que pé está o material. \"O agente já sabe\", em verde: está preparado e o agente encontra. \"Não entrou\", em vermelho: a preparação falhou, e o motivo está em \"Por que não entrou\". \"Esperando a chave\", em laranja: o material foi guardado, mas só será preparado quando houver uma chave valendo. Existe ainda \"Entrou pela metade\", em laranja: só parte do material foi preparada. Ele entra na conta \"com erro\" do quadro de cima. Clique em \"Preparar de novo\" para tentar completar.",
           "dica": "Dois selos não aparecem aqui. \"Ainda não preparado\", em cinza, é o do material que ainda não passou pela preparação, como um recém-cadastrado. \"Preparando…\", em azul, aparece enquanto o sistema prepara.",
           "destaques": [
             {
@@ -276,7 +276,7 @@
           "id": "p3",
           "titulo": "Colar a chave e salvar",
           "texto": "No campo \"Chave da OpenAI\", cole a chave que você criou no site do serviço; o endereço aparece logo abaixo do campo, como platform.openai.com/api-keys. A chave é guardada cifrada e nunca aparece de volta na tela. Clique em \"Salvar chave\". O sistema confere a chave com o serviço, o que leva alguns segundos. Quando ela for aceita, o aviso dá lugar a \"Pronto para preparar material.\", com o nome da chave.",
-          "dica": "Com a chave valendo, clique em \"Preparar tudo de novo\" para preparar o material que ficou para trás. \"Cancelar\" fecha o formulário sem guardar nada.",
+          "dica": "Com a chave valendo, clique em \"Preparar tudo de novo\" para preparar o material que ficou para trás. \"Cancelar\" fecha o formulário sem guardar nada. Só o administrador consegue salvar a chave. Um gerente vê o aviso e o formulário, mas ao clicar em \"Salvar chave\" recebe uma mensagem de que não tem permissão.",
           "destaques": [
             {
               "alvo": {
@@ -747,7 +747,7 @@
         {
           "id": "p7",
           "titulo": "Os arquivados",
-          "texto": "O material sai da grade e entra na lista de arquivados, no fim da tela. Clique nela para ver os nomes. Material arquivado não é apagado, mas também não tem botão para voltar: para usar o conteúdo de novo, cadastre-o outra vez. O nome pode ser repetido.",
+          "texto": "O material sai da grade e entra na lista de arquivados, no fim da tela. Clique nela para ver os nomes. Material arquivado não é apagado, mas também não tem botão para voltar: para usar o conteúdo de novo, cadastre-o outra vez. Você pode usar o mesmo nome do material arquivado. Dois materiais em uso, porém, não podem ter o mesmo nome.",
           "antes": [
             {
               "acao": "click",

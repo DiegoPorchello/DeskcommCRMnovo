@@ -694,7 +694,7 @@
         {
           "id": "p5",
           "titulo": "Mover e arquivar",
-          "texto": "Com o destino escolhido, o botão vira \"Mover os negócios e arquivar\". Clique nele: os negócios mudam de coluna primeiro, e só depois a etapa sai do funil. Sem escolher o destino, o botão fica apagado.",
+          "texto": "O botão \"Mover os negócios e arquivar\" fica apagado até você escolher o destino. Depois de escolher, clique nele: os negócios mudam de coluna primeiro, e só depois a etapa sai do funil.",
           "antes": [
             {
               "acao": "click",

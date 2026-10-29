@@ -88,10 +88,10 @@ const ENCERRADOS: Array<{ n: number; nome: string; caminho: number[]; motivo?: s
   { n: 33, nome: "Natália Cunha", caminho: [3, 4, 6], motivo: "no_response", diasAtras: 12 },
 ];
 
-export async function semear(c: Contexto) {
-  const { db, org, pessoa } = c;
-
-  // ---------- limpa o que é desta semente (e um "Pilates" que sobrou de Funis) ----------
+/** A base chama antes de QUALQUER aula: o funil que sobra aparece no Kanban e nos seletores de funil dos outros módulos. */
+export async function limpar(c: Contexto) {
+  const { db, org } = c;
+  // o que é desta semente (e um "Pilates" que sobrou de Funis)
   const funis = exigir(
     await db.from("crm_pipelines").select("id").eq("organization_id", org).or(`id.eq.${FUNIL_PILATES},name.eq.Pilates,slug.eq.pilates`),
     "funis a limpar",
@@ -106,6 +106,11 @@ export async function semear(c: Contexto) {
     await db.from("contacts").delete().eq("organization_id", org).in("id", CONTATOS.map((x) => contatoId(x.n))),
     "contatos do funil Pilates",
   );
+}
+
+export async function semear(c: Contexto) {
+  const { db, org, pessoa } = c;
+  await limpar(c);
 
   // ---------- o funil ----------
   semErro(

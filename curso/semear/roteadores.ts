@@ -25,9 +25,12 @@ const ROTEADOR = "d1130000-0000-4000-8000-000000000001";
 /** Nomes que as lições criam pela tela: apagados aqui para cada lição partir do mesmo estado. */
 const CRIADAS_NAS_LICOES = ["Triagem do WhatsApp"];
 
-export async function semear(c: Contexto) {
-  const { db, org, sessao, agenteId } = c;
-
+/**
+ * A base chama antes de QUALQUER aula. A lição de criar clica em "Criar roteador" de verdade, e o
+ * POST não manda `is_active`: o roteador nasce LIGADO no número da recepção e mudaria outras telas.
+ */
+export async function limpar(c: Contexto) {
+  const { db, org } = c;
   // apagar o roteador leva junto, por cascata, as intenções (ai_router_members)
   semErro(await db.from("ai_routers").delete().eq("organization_id", org).eq("id", ROTEADOR), "limpar roteador");
   semErro(
@@ -38,6 +41,11 @@ export async function semear(c: Contexto) {
       .in("name", CRIADAS_NAS_LICOES.flatMap((n) => [n, demo(n)])),
     "limpar roteadores das lições",
   );
+}
+
+export async function semear(c: Contexto) {
+  const { db, org, sessao, agenteId } = c;
+  await limpar(c);
 
   semErro(
     await db.from("ai_routers").insert({

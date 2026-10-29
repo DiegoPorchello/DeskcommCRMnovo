@@ -173,5 +173,7 @@
   "^NutriVida Consultório.*IA Budget": "^NutriVida Consultório.*Presupuesto IA",
   "^Tag: convenio": "^Etiqueta: convenio",
   "Responsável:": "Responsable:",
-  "^(Hoje|Ontem)$": "^(Hoy|Ayer)$"
+  "^(Hoje|Ontem)$": "^(Hoy|Ayer)$",
+  "^Fluxos de atendimento ": "^Flujos de atención ",
+  "^Uso e orçamento ": "^Uso y presupuesto "
 }

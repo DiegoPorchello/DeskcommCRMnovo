@@ -546,7 +546,7 @@
         {
           "id": "p2",
           "titulo": "Colar a chave nova",
-          "texto": "Cole a chave nova em \"Nova chave (opcional)\" e clique em \"Salvar\". Trocar a chave por aqui mantém os agentes ligados a ela: no próximo atendimento eles já usam a nova. Depois de salvar, o sistema confere a chave nova com o provedor, e o selo do cartão mostra o resultado.",
+          "texto": "Cole a chave nova em \"Nova chave (opcional)\" e clique em \"Salvar\". Trocar a chave por aqui mantém os agentes ligados a ela. Depois de salvar, o sistema confere a chave nova com o provedor: assim que o selo mostrar \"Validada\", os agentes já usam a chave nova. Se o selo mostrar \"Inválida\", eles ficam sem chave até você corrigir.",
           "dica": "Se uma chave vazou, crie outra no site do provedor, troque aqui e depois apague a antiga lá no provedor.",
           "antes": [
             {

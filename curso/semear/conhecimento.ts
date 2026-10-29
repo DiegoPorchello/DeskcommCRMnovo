@@ -105,10 +105,12 @@ function vetor(texto: string): string {
 
 const traduzir = (pares: Par[]) => pares.map((p) => ({ q: demo(p.q), a: demo(p.a) }));
 
-export async function semear(c: Contexto) {
+/**
+ * A base chama antes de QUALQUER aula: um acervo que sobra apaga o aviso
+ * "sem acervo" que a aula de Agentes fotografa.
+ */
+export async function limpar(c: Contexto) {
   const { db, org } = c;
-
-  // ---------- limpar: o que as lições criaram e as próprias linhas ----------
   const criadas = ((await db
     .from("ai_knowledge_sources")
     .select("id, source_metadata")
@@ -122,6 +124,12 @@ export async function semear(c: Contexto) {
     await db.from("ai_knowledge_sources").delete().eq("organization_id", org).in("id", [1, 2, 3, 4, 5].map(fonteId)),
     "limpar materiais",
   );
+  await db.storage.from(BUCKET).remove([`${org}/${ARQUIVO_DO_PREPARO}`]);
+}
+
+export async function semear(c: Contexto) {
+  const { db, org } = c;
+  await limpar(c);
 
   // ---------- o texto colado vira arquivo .md no Storage, como o POST grava ----------
   const caminhoDoPreparo = `${org}/${ARQUIVO_DO_PREPARO}`;

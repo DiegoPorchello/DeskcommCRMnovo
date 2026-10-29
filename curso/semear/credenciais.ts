@@ -29,8 +29,8 @@
  *    (`lib/ai/classifier-models.ts`) continua sem opção, como aquela aula diz.
  *  - Nenhuma do Jev (TypeSafe): o cartão do Jev em Provedores muda com ela.
  * O que NÃO dá para evitar: a tela Provedores esconde o aviso "Você ainda não
- * cadastrou a chave..." quando existe QUALQUER chave ativa. A bancada apaga estas
- * linhas depois de fotografar (ver o resultado do módulo).
+ * cadastrou a chave..." quando existe QUALQUER chave ativa. Por isso `limpar`
+ * apaga estas linhas antes de toda aula, e elas só existem durante esta.
  *
  * Idempotente: apaga só as próprias linhas (ids fixos) e recria — a lição que
  * renomeia uma chave volta ao nome original na próxima rodada. Nenhuma versão de
@@ -61,13 +61,17 @@ function cifrada(chave: string) {
   };
 }
 
-export async function semear(c: Contexto) {
-  const { db, org, pessoa } = c;
-  const ids = [1, 2, 3].map(credencialId);
+/** A base chama antes de QUALQUER aula: com uma chave ativa, Provedores esconde o aviso de chave ausente. */
+export async function limpar(c: Contexto) {
   semErro(
-    await db.from("ai_provider_credentials").delete().eq("organization_id", org).in("id", ids),
+    await c.db.from("ai_provider_credentials").delete().eq("organization_id", c.org).in("id", [1, 2, 3].map(credencialId)),
     "limpar as chaves do curso",
   );
+}
+
+export async function semear(c: Contexto) {
+  const { db, org, pessoa } = c;
+  await limpar(c);
 
   const CHAVES = [
     {

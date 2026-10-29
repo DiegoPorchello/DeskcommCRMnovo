@@ -24,7 +24,7 @@
           "titulo": "Onde fica a tela",
           "rota": "/app/crm",
           "texto": "Planos de tarefa não aparece direto no menu lateral. No grupo \"CRM\" do menu, clique em \"Ver tudo em CRM\". Na parte \"O dia a dia da venda\" está o cartão \"Planos de tarefa\". O caminho completo é: CRM › Ver tudo em CRM › Planos de tarefa.",
-          "dica": "Se o cartão não aparecer, a interface da empresa ou a sua foi enxugada: com o \"Perfil de interface\" \"Simplificada\", ele some. Quem administra muda isso em Configurações › Organização.",
+          "dica": "Se o cartão não aparecer, a interface da empresa ou a sua foi enxugada: com o \"Perfil de interface\" \"Simplificada\", ele some. Quem administra muda isso em Configurações › Organização (para a empresa toda) ou em Equipe (só para uma pessoa).",
           "antes": [],
           "destaques": [
             {

@@ -292,7 +292,7 @@
         {
           "id": "p2",
           "titulo": "A chave da Apify",
-          "texto": "Em \"Chave da Apify\", cole o token da API, que você encontra nas configurações da sua conta na Apify, e clique em \"Salvar chave\". Antes de gravar, o sistema confere a chave com a Apify: se ela não for aceita, nada é salvo e aparece o aviso. Aceita, ela fica cifrada no servidor, os quadros se fecham e aparece \"Chave de busca salva.\". A chave salva não volta a aparecer; para trocar, cole a nova e salve de novo.",
+          "texto": "Em \"Chave da Apify\", cole a chave da sua conta na Apify. No site da Apify ela fica em Configurações e aparece com o nome \"API token\". Depois clique em \"Salvar chave\". Antes de gravar, o sistema confere a chave com a Apify: se ela não for aceita, nada é salvo e aparece o aviso. Aceita, ela fica cifrada no servidor, os quadros se fecham e aparece \"Chave de busca salva.\". A chave salva não volta a aparecer; para trocar, cole a nova e salve de novo.",
           "dica": "O campo mostra só pontinhos enquanto você digita, para a chave não aparecer na tela.",
           "antes": [
             {
@@ -554,7 +554,7 @@
         {
           "id": "p1",
           "titulo": "Leia cada empresa",
-          "texto": "Com a busca concluída, a campanha fica em \"Preparar campanha\" e cada empresa aparece como \"Encontrado\". Na coluna \"Auditoria\", o \"Score\" soma três sinais: a nota no Google, o número de avaliações e a situação do site. Embaixo vem o resumo do site, como \"Site com problemas\", \"Sem site próprio\" ou \"Site em ordem\", e, por último, o começo da prévia: o rascunho da primeira mensagem que a IA preparou.",
+          "texto": "Com a busca concluída, a campanha fica em \"Preparar campanha\" e cada empresa aparece como \"Encontrado\". Na coluna \"Auditoria\", o \"Score\" soma três sinais: a nota no Google, o número de avaliações e a situação do site. Embaixo vem o resumo do site, como \"Site com problemas\", \"Sem site próprio\" ou \"Site em ordem\", e, por último, o começo da prévia: o rascunho da primeira mensagem que a IA preparou. No alto da tabela, o seletor \"Ordenar\" com a opção \"Score\" põe primeiro as empresas com mais pontos.",
           "dica": "O Score foi pensado para quem vende site ou automação. Com a oferta \"Site profissional\", empresa sem site ou com site ruim ganha mais pontos do que empresa com o site em ordem. Se a sua oferta é outra, use o Score só como uma pista.",
           "rota": "/app/prospecting",
           "antes": [
@@ -828,12 +828,13 @@
             "role": "button",
             "nome": "Usar agente existente / configurar manualmente",
             "exato": true
-          }
+          },
+          "dica": "Atenção: ao clicar em \"Publicar e usar agente\", o agente novo passa a poder atender as mensagens que chegam nesse número, não só as da prospecção."
         },
         {
           "id": "p2",
           "titulo": "Agente, conexão e funil",
-          "texto": "Em \"Agente de IA\", escolha o agente: a lista só mostra agentes publicados, em modo automático e sem pausa. Em \"Conexão de saída\", o número que envia as mensagens; só aparecem conexões ativas. Em \"Funil\", o funil em que as empresas entram. \"Etapa inicial\" é onde elas começam e \"Etapa de qualificados\" é a etapa que marca quem se qualificou na conversa. As duas etapas precisam ser diferentes.",
+          "texto": "Em \"Agente de IA\", escolha o agente: a lista só mostra agentes publicados, em modo automático e sem pausa. Em \"Conexão de saída\", escolha o número que envia as mensagens. Só aparecem conexões ativas, e ele precisa ser um número conectado pelo QR Code: o número oficial da Meta ainda não serve para a Prospecção. Em \"Funil\", o funil em que as empresas entram. \"Etapa inicial\" é onde elas começam e \"Etapa de qualificados\" é a etapa que marca quem se qualificou na conversa. As duas etapas precisam ser diferentes.",
           "antes": [
             {
               "acao": "click",

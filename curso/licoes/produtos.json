@@ -216,7 +216,7 @@
         {
           "id": "p2",
           "titulo": "Código e nome",
-          "texto": "\"Código\" é a identificação do produto na clínica, como a etiqueta da prateleira. Ele não pode se repetir: se já existir um produto com o mesmo código, a tela avisa e não salva. \"Nome\" é como o produto aparece na lista e para o atendente de IA. Escreva do jeito que um cliente pediria.",
+          "texto": "\"Código\" é a identificação do produto na clínica, como a etiqueta da prateleira. Ele não pode se repetir: se já existir um produto com o mesmo código, a tela avisa e não salva. \"Nome\" é como o produto aparece na lista e para o atendente de IA. Escreva do jeito que um cliente pediria. Código e Nome são obrigatórios: sem eles a tela avisa e não salva.",
           "antes": [
             {
               "acao": "click",
@@ -755,8 +755,8 @@
         {
           "id": "p5",
           "titulo": "Importar de novo atualiza",
-          "texto": "O código liga cada linha da planilha a um produto. Importar de novo um código que já existe atualiza aquele produto, sem criar outro: é assim que se corrige a lista de preços inteira de uma vez. Se a planilha não tem coluna de código, o nome faz esse papel. A importação não mexe na descrição nem nas fotos, e não reativa um produto desativado.",
-          "dica": "Sem coluna de estoque, os produtos da planilha entram sem controle de estoque. No fim, a tela mostra um resumo: quantos produtos entraram, quantos foram atualizados e quais linhas não entraram, com o motivo.",
+          "texto": "O código liga cada linha da planilha a um produto. Importar de novo um código que já existe atualiza aquele produto, sem criar outro. Se a planilha não tem coluna de código, o nome faz esse papel. A importação não mexe na descrição, nas fotos nem em quem está desativado. Todo o resto do produto passa a ser o que está na planilha: coluna que falta ou célula vazia apaga a marca, a categoria e o custo, e sem a coluna de estoque o produto deixa de controlar estoque. Para corrigir só os preços, baixe a planilha completa, troque os preços e importe de volta com todas as colunas.",
+          "dica": "No fim, a tela mostra um resumo: quantos produtos entraram, quantos foram atualizados e quais linhas não entraram, com o motivo.",
           "antes": [],
           "destaques": [
             {

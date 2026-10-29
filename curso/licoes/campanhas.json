@@ -417,7 +417,8 @@
               "rotulo": "Por que pode escrever",
               "tipo": "caixa"
             }
-          ]
+          ],
+          "dica": "Se você escolher o número oficial do WhatsApp (o da Meta), a parte \"Mensagem\" muda: em vez de escrever o texto, você escolhe um modelo já aprovado pela Meta. A lição mostra o número conectado pelo QR Code."
         },
         {
           "id": "p3",
@@ -517,7 +518,7 @@
         {
           "id": "p5",
           "titulo": "A mensagem",
-          "texto": "Em \"Mensagem\", escreva como se falasse com uma pessoa só. Os botões logo abaixo põem, no fim do texto, um campo que muda para cada contato: {{nome}} é o nome do cadastro, {{primeiro_nome}} é só o primeiro nome e {{saudacao}} vira \"Bom dia\", \"Boa tarde\" ou \"Boa noite\", conforme a hora do envio. Quem não tiver o dado que a mensagem usa fica de fora da lista, com o motivo anotado.",
+          "texto": "Em \"Mensagem\", escreva como se falasse com uma pessoa só. Os botões logo abaixo põem, no fim do texto, um campo que muda para cada contato: {{nome}} é o nome do cadastro, {{primeiro_nome}} é só o primeiro nome e {{saudacao}} vira \"Bom dia\", \"Boa tarde\" ou \"Boa noite\", conforme a hora do envio. Quem não tiver o dado que a mensagem usa fica de fora da lista, com o motivo anotado. Para não perder ninguém por falta de dado, ponha um texto de reserva entre aspas: {{primeiro_nome|\"paciente\"}} usa \"paciente\" quando o cadastro não tem o nome.",
           "antes": [
             {
               "acao": "fill",
@@ -1137,7 +1138,7 @@
         {
           "id": "p5",
           "titulo": "Pausar e retomar",
-          "texto": "Para parar o envio por um tempo, clique em \"Pausar\", no alto. A campanha fica \"Pausada\" e ninguém mais recebe até alguém clicar em \"Retomar\". Uma mensagem que já estava saindo na hora da pausa ainda pode chegar. Para desistir de vez, use \"Cancelar campanha\": a tela pede confirmação, e depois quem ainda não recebeu não recebe mais e a campanha não volta a rodar.",
+          "texto": "Para parar o envio por um tempo, clique em \"Pausar\", no alto. A campanha fica \"Pausada\" e ninguém mais recebe até alguém clicar em \"Retomar\". Uma mensagem que já estava saindo na hora da pausa ainda pode chegar. Para desistir de vez, use \"Cancelar campanha\": a tela pede confirmação, e depois quem ainda não recebeu não recebe mais e a campanha não volta a rodar. A campanha também pode ficar \"Pausada\" sozinha, quando o envio inteiro falha. Nesse caso aparece \"Último problema\" embaixo do nome, dizendo o que houve: corrija a causa e clique em \"Retomar\".",
           "antes": [
             {
               "acao": "click",
@@ -1189,7 +1190,7 @@
           "id": "p6",
           "titulo": "Mandar de novo com Duplicar",
           "rota": "/app/campaigns",
-          "texto": "Uma campanha \"Concluída\" não envia de novo. Para repetir a ideia, abra a campanha e clique em \"Duplicar\". A cópia nasce como \"Rascunho\", com a mesma mensagem, o mesmo público e o mesmo ritmo, mas sem a lista e sem os números da campanha antiga.",
+          "texto": "Uma campanha \"Concluída\" não envia de novo. Para repetir a ideia, abra a campanha e clique em \"Duplicar\". A cópia nasce como \"Rascunho\", com a mesma mensagem, o mesmo público e o mesmo ritmo, mas sem a lista e sem os números da campanha antiga. O que estava em \"Quem responder\" (funil e agente) e os números extras não vêm junto: abra \"Editar\" e escolha de novo.",
           "antes": [
             {
               "acao": "click",
