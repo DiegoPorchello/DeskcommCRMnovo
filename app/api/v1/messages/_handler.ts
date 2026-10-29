@@ -850,6 +850,22 @@ export async function sendMessageHandler(
     );
   }
 
+  // #3649: o nome do agente viaja GRAVADO na linha (metadata.ai_actor_name),
+  // porque o balão não faz join. Resolvemos na origem — `ai_actor_id` não é
+  // confiável para isso (run id no finalize, id do agente no handler).
+  const idDoAgenteParaBalao =
+    origemDoEmissor === "ai"
+      ? ctx.actor.type === "ai_agent"
+        ? (ctx.actor.agent_id ?? ctx.actor.id)
+        : ctx.actor.type === "webhook_source"
+          ? (ctx.actor.agent_id ?? null)
+          : null
+      : null;
+  const nomeDoAgenteParaBalao =
+    idDoAgenteParaBalao !== null
+      ? await nomeDoAgenteDeIA(supabase, ctx.organization_id, idDoAgenteParaBalao)
+      : null;
+
   const insertRow = {
     ...(ctx.internalMessageId ? { id: ctx.internalMessageId } : {}),
     organization_id: c.organization_id,
@@ -876,6 +892,7 @@ export async function sendMessageHandler(
     metadata: {
       ...(input.metadata ?? {}),
       ...(ctx.actor.type === "ai_agent" ? { ai_actor_id: ctx.actor.id } : {}),
+      ...(origemDoEmissor === "ai" ? { ai_actor_name: nomeDoAgenteParaBalao } : {}),
       // Os dois nomes viajam GRAVADOS porque o balão não faz join: "Fulano ·
       // via {token}" é desenhado da própria linha. Vêm DEPOIS de
       // `input.metadata` de propósito — metadata é entrada do cliente, e

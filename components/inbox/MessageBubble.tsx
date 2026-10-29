@@ -238,7 +238,31 @@ export function MessageBubble({
       // o mesmo erro de #1046.
       return emNomeDe.token_name ? `${nome} · ${t("via")} ${emNomeDe.token_name}` : nome;
     }
-    if (message.sent_via === "ai") return "IA";
+    if (message.sent_via === "ai") {
+      // O nome do agente viaja GRAVADO na linha (metadata), porque o balão não
+      // faz join (#3649). Sem nome disponível, mantém "IA" — nunca quebra o
+      // balão por dado ausente.
+      const meta = (message.metadata ?? {}) as Record<string, unknown>;
+      const nomeDoAgente =
+        (typeof meta.ai_actor_name === "string" && meta.ai_actor_name.trim()) ||
+        (typeof meta.ai_agent_name === "string" && meta.ai_agent_name.trim()) ||
+        (typeof meta.agent_name === "string" && meta.agent_name.trim()) ||
+        (typeof meta.ai_name === "string" && meta.ai_name.trim()) ||
+        (typeof (meta.ai_actor as { name?: unknown } | undefined)?.name === "string" &&
+          ((meta.ai_actor as { name: string }).name.trim() || null)) ||
+        (typeof (meta.ai_agent as { name?: unknown } | undefined)?.name === "string" &&
+          ((meta.ai_agent as { name: string }).name.trim() || null)) ||
+        (typeof (meta.agent as { name?: unknown } | undefined)?.name === "string" &&
+          ((meta.agent as { name: string }).name.trim() || null)) ||
+        null;
+      // Também aceita a coluna direta, quando ela existir na linha.
+      const nomeDaColuna =
+        typeof (message as unknown as { ai_actor_name?: unknown }).ai_actor_name === "string"
+          ? ((message as unknown as { ai_actor_name: string }).ai_actor_name.trim() || null)
+          : null;
+      const nome = nomeDaColuna || nomeDoAgente;
+      return nome ? `IA · ${nome}` : "IA";
+    }
     // A REGRA falou, e não a IA: texto fixo de automação, follow-up ou lembrete
     // de agenda (#652). O ramo passou a existir porque o valor passou a ser
     // gravado — antes dele, um rótulo aqui seria promessa sem dado atrás.
@@ -453,7 +477,7 @@ export function MessageBubble({
         )}
         {senderLabel && (
           <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold opacity-80">
-            {senderLabel === "IA" ? (
+            {message.sent_via === "ai" ? (
               <Robot size={10} weight="duotone" aria-hidden />
             ) : null}
             {senderLabel && t(senderLabel)}
