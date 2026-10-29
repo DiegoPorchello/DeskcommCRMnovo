@@ -50,6 +50,21 @@ describe("descoberta de modelos nativos", () => {
     ).toEqual(["anthropic"]);
   });
 
+  it("modelo de tempo real (voz) não entra, mesmo com texto e ferramentas", () => {
+    const r = resposta();
+    expect(
+      traduzirCatalogoNativo({
+        ...r,
+        openai: {
+          models: {
+            ...r.openai.models,
+            "gpt-realtime-2.1": { ...modelo("gpt-realtime-2.1"), type: "realtime" },
+          },
+        },
+      }).map((m) => m.model_id),
+    ).toEqual(["gpt-6.1-terra", "claude-opus-5-5"]);
+  });
+
   it("modelo de imagem com contexto zero não impede descobrir modelos de conversa", () => {
     const r = resposta();
     expect(

@@ -11,6 +11,7 @@ const modelo = z.object({
   name: z.string().trim().min(1),
   description: z.string().optional(),
   tool_call: z.boolean(),
+  type: z.string().optional(),
   status: z.string().optional(),
   modalities: z.object({ input: z.array(z.string()), output: z.array(z.string()) }),
   limit: z.object({ context: z.number().int().nonnegative().optional() }),
@@ -32,6 +33,7 @@ export function traduzirCatalogoNativo(resposta: unknown): LinhaDeCatalogo[] {
       if (id !== m.id) throw new Error("catalogo_nativo_id_divergente");
       if (
         m.status === "deprecated" ||
+        (m.type !== undefined && m.type !== "chat") ||
         !m.tool_call ||
         !m.modalities.input.includes("text") ||
         !m.modalities.output.includes("text")
