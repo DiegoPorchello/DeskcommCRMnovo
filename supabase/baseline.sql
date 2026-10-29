@@ -65613,3 +65613,35 @@ update public.lead_field_proposals p
           and vinculo.target_kind = 'contact'
      )
    );
+
+-- ---- catálogo: GPT-6.1 Terra (migration 9031) ----
+-- O dump --schema-only não traz seed pós-snapshot. Sem este apêndice, clones
+-- novos (install.sh) e clones atualizando (update.sh reaplica baseline.sql)
+-- ficam sem o gpt-6.1-terra em Provedores de IA e no seletor do agente.
+-- As DUAS tabelas com os MESMOS números (invariante catálogo×preço). Não mexe
+-- no padrão (segue gpt-5.6-terra). Fonte do preço no cabeçalho da migration.
+insert into public.ai_models
+  (provider, model_id, display_name, description, context_window,
+   input_price_per_million_cents, output_price_per_million_cents, supports_tools)
+values
+  ('openai', 'gpt-6.1-terra', 'GPT-6.1 Terra',
+   'Intermediário da linha 6: mais capaz que o Luna, metade do preço do Sol.',
+   1050000, 100, 500, true)
+on conflict (provider, model_id) do update set
+  display_name = excluded.display_name,
+  description = excluded.description,
+  context_window = excluded.context_window,
+  input_price_per_million_cents = excluded.input_price_per_million_cents,
+  output_price_per_million_cents = excluded.output_price_per_million_cents,
+  supports_tools = excluded.supports_tools,
+  deprecated_at = null;
+
+insert into public.ai_pricing
+  (model, prompt_cents_per_million_tokens, completion_cents_per_million_tokens, notes)
+values
+  ('gpt-6.1-terra', 100, 500, 'catálogo 9031 — acima de 272k tokens de entrada, 200/750')
+on conflict (model) do update set
+  prompt_cents_per_million_tokens = excluded.prompt_cents_per_million_tokens,
+  completion_cents_per_million_tokens = excluded.completion_cents_per_million_tokens,
+  notes = excluded.notes,
+  superseded_at = null;
