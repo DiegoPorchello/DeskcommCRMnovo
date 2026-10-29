@@ -2381,6 +2381,14 @@ export const DICIONARIO: Traducoes = {
   // ─── Agentes de IA: seletor de modelo, capacidades, credencial, handoff ───
   Modelo: { es: "Modelo" },
   "Selecione um modelo": { es: "Selecciona un modelo" },
+  "Buscar modelo": { es: "Buscar modelo" },
+  "Nenhum modelo encontrado": { es: "Ningún modelo encontrado" },
+  "Preço por 1 milhão de tokens": { es: "Precio por 1 millón de tokens" },
+  "Preço não informado": { es: "Precio no informado" },
+  "Grátis": { es: "Gratis" },
+  "Este modelo é a variante de lote e não responde no chat. Escolha outro da lista.": {
+    es: "Este modelo es la variante por lotes y no responde en el chat. Elige otro de la lista.",
+  },
   "Digite o identificador do modelo": { es: "Escribe el identificador del modelo" },
   "Conecte a assinatura do ChatGPT em IA › Credenciais para listar os modelos.": {
     es: "Conecta la suscripción de ChatGPT en IA › Credenciales para listar los modelos.",
