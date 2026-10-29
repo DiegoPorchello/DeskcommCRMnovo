@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ligarPeloTelefone } from "@/hooks/leads/useParticipantesDoNegocio";
 import { ApiError } from "@/lib/api/types";
+import type { apiClient } from "@/lib/api/client";
 
 /**
  * "+ TELEFONE" NO DOSSIÊ (#3669, fatia 1): acha ou cria o contato pelo número
@@ -21,7 +22,7 @@ function api(primeira: () => Promise<unknown>) {
     if (caminho === "/api/v1/contacts") return primeira();
     return { data: { ok: true } };
   });
-  return { post: post as never as typeof import("@/lib/api/client").apiClient.post, chamadas: post };
+  return { post: post as never as typeof apiClient.post, chamadas: post };
 }
 
 describe("ligarPeloTelefone", () => {
