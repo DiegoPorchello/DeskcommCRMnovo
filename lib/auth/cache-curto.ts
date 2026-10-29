@@ -333,7 +333,7 @@ export async function comCacheCurto<T>({
 // Identidade da SESSÃO a partir dos cookies — a chave do cache de sessão.
 // ---------------------------------------------------------------------------
 
-/** `sb-deskcomm-auth`, `sb-deskcomm-auth.0`, `sb-<ref>-auth-token`… */
+/** `sb-<ref>-auth`, `sb-<ref>-auth.0`, `sb-<ref>-auth-token`… */
 const COOKIE_DE_SESSAO = /^sb-[A-Za-z0-9._-]*auth(-token)?(\.\d+)?$/;
 
 /** O prefixo que o `@supabase/ssr` usa para o valor em base64url. */

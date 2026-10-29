@@ -146,40 +146,24 @@ export function ehSessaoAusente(error: { name?: string } | null | undefined): bo
 }
 
 /**
- * Os cookies da requisição — ou `null` quando não HÁ requisição.
- *
- * `cookies()` do Next lança fora de um escopo de requisição (script, job,
- * `node -e`, um teste que não dublou `next/headers`). Antes do #3696 isso não
- * aparecia aqui porque `loadAuthUser` só tocava o cookie para resolver IDIOMA, e
- * só quando precisava; a chave do cache de sessão toca sempre. Quem chama
- * `loadAuthUser` sem requisição continua funcionando — só não tem sessão para
- * reaproveitar, e cai no caminho de sempre.
+ * A sessão que os cookies da requisição identificam — `null` quando não há
+ * requisição (script, job) ou quando o cookie não é reconhecível. Nesses casos a
+ * requisição segue o caminho direto, sem chave de cache.
  */
-async function cookiesDaRequisicao(): Promise<{ name: string; value: string }[] | null> {
+async function sessaoDosCookiesDaIrequisicao(): Promise<SessaoDosCookies | null> {
   try {
-    return (await cookies()).getAll();
+    return sessaoDosCookies((await cookies()).getAll());
   } catch {
+    // `cookies()` lança fora de escopo de requisição. Antes do #3696 este
+    // caminho nem tocava o cookie de sessão; quem chama `loadAuthUser` de um
+    // script continua funcionando, só não reaproveita nada.
     return null;
   }
 }
 
-/**
- * O `getUser()` da requisição: UMA ida ao servidor de autenticação, partilhada
- * por `loadAuthUser` e `isMfaEnrolled`.
- *
- * Cada tela de `/app` pedia o usuário ao GoTrue duas vezes — uma aqui, outra
- * dentro do `listFactors()` do auth-js, que chama `getUser()` pela rede e só
- * filtra `user.factors`. A resposta é a mesma; a segunda ida era uma espera a
- * mais (e uma linha a mais no log do Supabase) em toda tela.
- *
- * O CLIENTE vai junto com a resposta, e não por enfeite: se o `getUser`
- * renovou o token, é este cliente que tem o token novo — as consultas de
- * `loadAuthUser` precisam sair dele, como sempre saíram.
- */
 const sessaoDaRequisicao = cache(async () => {
   const supabase = await createClient();
-  const pares = await cookiesDaRequisicao();
-  const sessao = pares ? sessaoDosCookies(pares) : null;
+  const sessao = await sessaoDosCookiesDaIrequisicao();
   /**
    * CACHE ENTRE REQUISIÇÕES DO `getUser()` — é a maior linha do log do
    * Supabase na issue #3696 (18,6 mil `/auth/v1/user` em ~17 h), porque toda
