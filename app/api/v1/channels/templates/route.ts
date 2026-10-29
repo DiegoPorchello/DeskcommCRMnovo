@@ -264,7 +264,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // pode virar "sincronizar por omissão" nem tocar a conta.
   const cru = (await req.json().catch(() => null)) as unknown;
   const parsed = corpoSchema.safeParse(
-    cru && typeof cru === "object" && !Array.isArray(cru) ? { acao: "sincronizar", ...cru } : {},
+    // Sem corpo é SINCRONIZAR: era o contrato da rota antes da #3635 (o POST
+    // nem lia o corpo), e integração que chama sem corpo não pode virar 422.
+    cru === null
+      ? { acao: "sincronizar" }
+      : typeof cru === "object" && !Array.isArray(cru)
+        ? { acao: "sincronizar", ...cru }
+        : {},
   );
   if (!parsed.success) {
     return fail("validation_failed", t("Faltam nome, idioma ou conteúdo."), 422, { requestId });

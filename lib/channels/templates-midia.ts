@@ -34,7 +34,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { requireSupportWrite } from "@/lib/impersonate/support";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { extensaoDe, farejarTipo, pareceSvg } from "@/lib/branding/logo-arquivo";
@@ -61,11 +60,14 @@ const VALIDADE_SEGUNDOS = 7 * 24 * 60 * 60;
 const TIPOS = new Set(["image/jpeg", "image/png"]);
 const TAMANHO_MAX = 5 * 1024 * 1024;
 
-/** O handler das rotas de mídia do cabeçalho (parceiro e canal oficial). */
+/**
+ * O handler das rotas de mídia do cabeçalho (parceiro e canal oficial).
+ *
+ * A guarda de suporte (`requireSupportWrite`) fica em CADA rota, antes de
+ * chamar este handler: é lá que `tests/unit/suporte-cobertura-de-efeitos.test.ts`
+ * a procura, e uma rota nova que reexportasse o handler sem ela passaria calada.
+ */
 export async function subirImagemDoCabecalho(req: NextRequest): Promise<Response> {
-  const supportDenied = await requireSupportWrite();
-  if (supportDenied) return supportDenied;
-
   const requestId = randomUUID();
 
   const authz = await requireRole("agent", { requestId, resource: "channel_templates" });

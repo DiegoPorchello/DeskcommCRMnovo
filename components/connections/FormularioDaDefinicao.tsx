@@ -18,6 +18,7 @@ import {
 } from "@/lib/channels/template-conteudo";
 import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
+import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 
 /**
  * O FORMULÁRIO de uma definição aprovada — criar ou editar. Mora num componente
@@ -74,6 +75,7 @@ export function FormularioDaDefinicao({
   onEnviar: (corpo: CorpoDoModelo) => void;
 }) {
   const t = useT();
+  const telefoneExemplo = useTelefoneExemplo();
 
   // O texto aprovado vira o formulário: quem edita uma vírgula não redigita a
   // definição inteira.
@@ -303,7 +305,7 @@ export function FormularioDaDefinicao({
                     p[i] = { ...b, telefone: e.target.value };
                     setBotoes(p);
                   }}
-                  placeholder="+595…"
+                  placeholder={telefoneExemplo}
                   aria-label={`${t("Telefone do botão")} ${i + 1}`}
                   className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm"
                 />
