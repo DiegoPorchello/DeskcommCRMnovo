@@ -2,10 +2,11 @@
  * O MENU PEDE A TELA SÓ QUANDO ALGUÉM VAI PARA ELA (#3170).
  *
  * O `<Link>` do App Router prefetcha todo destino que entra na viewport. Na
- * barra lateral isso é a árvore inteira: medido nesta base, **18 requisições
- * `?_rsc=` por tela**, cada uma um render RSC completo (proxy + `loadAuthUser` +
- * as cinco consultas do layout) para devolver ~2,3 KB de casca. O clique da
- * pessoa entra na fila atrás delas.
+ * barra lateral isso é a árvore inteira: medido nesta base, **37 requisições
+ * `?_rsc=` por tela** (19 destinos × as duas instâncias do menu), cada uma um
+ * render RSC completo (proxy + `loadAuthUser` + as cinco consultas do layout)
+ * para devolver ~2,3 KB de casca. Esses renders disputam o servidor com o
+ * clique da pessoa.
  *
  * Este teste guarda o COMPORTAMENTO, não o tempo: montar o hook não pode pedir
  * nada; o ponteiro (e o foco, para quem usa teclado) pede UMA vez por destino.

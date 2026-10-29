@@ -7,7 +7,7 @@
  * — e o `<Link>` do App Router prefetcha por padrão. Um item esquecido não é um
  * item: medido nesta base, cada item visível custa um render RSC completo
  * (`proxy.ts` + `loadAuthUser` + as cinco consultas de `app/app/layout.tsx`) em
- * TODA tela de `/app`, e é essa rajada que põe o clique na fila.
+ * TODA tela de `/app`, e é essa rajada que disputa o servidor com o clique.
  *
  * A régua é dura de propósito e não olha o nome da variável: TODO `<Link>` do
  * menu tem de receber as props do hook (o espalhamento `{...algo(href)}`), ou
@@ -56,7 +56,7 @@ describe("#3170 — o menu não prefetcha a árvore inteira", () => {
       expect(
         semPrefetch,
         `Todo <Link> do menu precisa de \`{...intencao(href)}\` (ou \`prefetch={false}\`). ` +
-          `Sem isso o Next prefetcha a tela inteira sozinho e o clique espera na fila:\n` +
+          `Sem isso o Next prefetcha a tela inteira sozinho e disputa o servidor com o clique:\n` +
           semPrefetch.join("\n---\n"),
       ).toEqual([]);
     });

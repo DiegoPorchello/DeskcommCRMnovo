@@ -45,8 +45,9 @@ export function SidebarContent({
   const [isPending, startTransition] = useTransition();
   const { user, activeOrg } = useAuth();
   /**
-   * O menu não prefetcha sozinho (#3170): 18 renders RSC por tela, um por item
-   * visível, e o clique espera socket livre atrás deles. O prefetch passa a ser
+   * O menu não prefetcha sozinho (#3170): um render RSC por link do menu (19
+   * destinos × as duas instâncias, lateral e móvel), e eles disputam o servidor
+   * com o render que o clique pediu. O prefetch passa a ser
    * por intenção (ponteiro/foco) — ver `hooks/navigation/prefetchPorIntencao.ts`.
    */
   const intencao = usePrefetchPorIntencao();

@@ -11,20 +11,19 @@ import { useCallback, useRef } from "react";
  * O `<Link>` do App Router prefetcha sozinho TODO destino que entra na viewport.
  * Na barra lateral isso é a árvore de navegação inteira: medido nesta base
  * (Chromium 1248, build de produção, `performance.getEntriesByType("resource")`),
- * uma única tela de `/app` dispara **18 pedidos `?_rsc=`** por conta própria —
- * um por item de menu visível — e cada um deles é um render RSC COMPLETO: o
+ * uma única tela de `/app` dispara **37 pedidos `?_rsc=`** por conta própria —
+ * um por link do menu (19 destinos × as duas instâncias, lateral e móvel) — e cada um deles é um render RSC COMPLETO: o
  * `proxy.ts` valida o JWT, `loadAuthUser` consulta `platform_admins`,
  * `user_organizations` e `fn_support_context`, o layout de `/app` roda as cinco
  * consultas dele, tudo para devolver um esqueleto de ~2,3 KB que a navegação
  * ainda vai refazer quando o dado chegar.
  *
  * Como as telas de `/app` são `force-dynamic`, o payload prefetchado é só a
- * casca: o prefetch paga o render inteiro e entrega quase nada. E como o
- * navegador abre no máximo 6 conexões por origem, os 18 pedidos ocupam a fila
- * que o clique precisa — a navegação que a pessoa pediu espera socket livre
- * atrás dos 17 que ela não pediu. Medido na mesma máquina e na mesma rota
- * (`/app/metrics` → `/app/contacts`): 690 ms parado na fila do navegador ANTES
- * de o pedido sair, 326 ms de servidor, 85 ms de cliente.
+ * casca: o prefetch paga o render inteiro e entrega quase nada. Esses renders
+ * disputam CPU e banco com o render que a pessoa pediu. Medido com a tela de
+ * partida já carregada (#3613), o pedido do destino sai em ~3 ms com ou sem a
+ * rajada, mas o TTFB dele cai de 339 para 152 ms (30 ms de RTT até o banco)
+ * quando ela some: a espera é no servidor, não no navegador.
  *
  * Esse mesmo bando já custou caro em outros lugares desta base: ele atropela
  * `router.refresh()` no meio (ver `components/branding/CampoDeLogo.tsx`,
