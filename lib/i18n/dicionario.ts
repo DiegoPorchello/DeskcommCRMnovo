@@ -1726,6 +1726,8 @@ export const DICIONARIO: Traducoes = {
 
   // ─── Inbox: caixa bloqueada até assumir (#3012) ───
   "Assuma esta conversa para responder.": { es: "Asume esta conversación para responder." },
+  // ─── Inbox: arquivo arrastado para o compositor (#3708) ───
+  "Solte o arquivo para anexar": { es: "Suelta el archivo para adjuntarlo" },
   "Bloquear a caixa de mensagem até o atendente assumir a conversa": {
     es: "Bloquear el cuadro de mensaje hasta que el agente asuma la conversación",
   },
