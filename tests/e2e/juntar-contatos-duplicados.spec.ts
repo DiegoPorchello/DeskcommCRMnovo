@@ -529,14 +529,19 @@ test.describe("Contatos duplicados — juntar pela tela", () => {
     expect(filas ?? []).toHaveLength(1);
     expect((filas ?? [])[0]).toMatchObject({ status: "discarded", reason: "nao_sao_a_mesma" });
 
-    // Fecha, reabre e confere que o par continua fora (a lista é relida do servidor).
-    await page.keyboard.press("Escape");
-    await expect(dialogo).toBeHidden();
+    // Recarrega a PÁGINA e reabre: a tela guarda a lista em cache, então só fechar e
+    // reabrir a janela não pede nada ao servidor. Com o recarregamento, o par fora
+    // prova que a dispensa ficou gravada, e não que a tela lembrou dela.
+    // A espera pela resposta vem ANTES do clique: depois do recarregamento não há
+    // cache, então o GET sai de verdade — e conferir "nenhum nome" antes de ele
+    // chegar passaria sem medir nada (a lista ainda carregando também tem zero).
+    await page.reload();
     const listaRelida = page.waitForResponse(
       (r) => r.url().includes("/api/v1/contacts/duplicates") && r.request().method() === "GET",
+      { timeout: 30_000 },
     );
     await page.getByRole("button", { name: /duplicados/i }).click();
-    await listaRelida;
+    expect((await listaRelida).ok()).toBe(true);
     await expect(dialogo).toBeVisible({ timeout: 20_000 });
     await expect(dialogo.getByText(NOME_SORRISO_A, { exact: true })).toHaveCount(0);
     await captura(page, "07-parecido-dispensado");
