@@ -1,8 +1,9 @@
 /**
  * #3643 — o clone nasce na ETAPA que quem leva o negócio escolheu.
  *
- * O diálogo "Levar para outro funil" passou a ter seletor de etapa, e o corpo
- * do `POST /api/v1/leads/[id]/clone` passou a aceitar `stage_id`. Quem prova que
+ * O diálogo "Levar para outro funil" passou a ter seletor de etapa, que manda
+ * `stage_id` no corpo do `POST /api/v1/leads/[id]/clone` (a rota já o aceitava;
+ * o que faltava era quem o enviasse e um teste da rota). Quem prova que
  * a escolha CHEGA ao negócio criado é este arquivo, e ele roda a ROTA de
  * verdade (auth, Supabase e os dois efeitos de escrita dublados):
  *
@@ -17,9 +18,9 @@
  *  4. etapa de fechamento é recusada com 422 `stage_destino_terminal` — a mesma
  *     régua, do lado de quem decide.
  *
- * Sabotagem (ver `previsao-sabotagem-3643.md`): a remoção do `stage_id` do
- * corpo é medida no diálogo; aqui ela derruba o caso 1, porque a rota recebe o
- * corpo sem a chave e cai no default.
+ * Sabotagem: a remoção do `stage_id` do corpo é medida no diálogo
+ * (`MoveToOtherPipelineDialog.test.tsx`); aqui ela derruba o caso 1, porque a
+ * rota recebe o corpo sem a chave e cai no default.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
