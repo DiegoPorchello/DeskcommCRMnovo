@@ -119,8 +119,37 @@ describe("allowlist de esquema — a recusa na GRAVAÇÃO", () => {
     }
     // Depois da primeira `/`, `?` ou `#`, o marcador segue valendo.
     expect(modeloAceito("https://erp.exemplo.com/{{lead.x}}")).toBe(true);
+    expect(modeloAceito("https://x.com/?c={{lead.x}}")).toBe(true);
+    expect(montarHref("https://x.com/?c={{lead.x}}", dados)).toBe(
+      "https://x.com/?c=.outro-dominio.example",
+    );
     expect(modeloAceito("https://erp.exemplo.com?c={{lead.x}}")).toBe(true);
     expect(modeloAceito("https://erp.exemplo.com#{{lead.x}}")).toBe(true);
+  });
+
+  it("o domínio é o que o navegador lê: barras e contrabarras a mais antes do host não abrem o domínio ao campo", () => {
+    // Para http(s), o navegador pula TODAS as `/` e `\` depois do esquema antes
+    // de ler o host. A régua recorta a autoridade do mesmo jeito.
+    const dados: DadosDoAtalho = { lead: { campos: { x: "outro-dominio.example" } } };
+    for (const url of [
+      "https:///{{lead.x}}",
+      "https:////{{lead.x}}",
+      "https:/\\{{lead.x}}",
+      "https:\\\\{{lead.x}}",
+      "https://\\{{lead.x}}/p",
+      "http:///{{lead.x}}?c=1",
+    ]) {
+      // `montarHref` primeiro: ele tem a própria conferência de host, e esta
+      // ordem mostra qual das duas portas falhou quando uma delas cede.
+      expect(montarHref(url, dados), url).toBeNull();
+      expect(atalhosParaExibir([atalho({ url })], dados), url).toEqual([]);
+      expect(modeloAceito(url), url).toBe(false);
+      expect(pipelineConfigPatchSchema.safeParse({ atalhos: [atalho({ url })] }).success, url).toBe(false);
+    }
+    expect(motivoDaRecusaDoModelo("https:///{{lead.x}}")).toBe("marcador_no_dominio");
+    expect(motivoDaRecusaDoModelo("https://\\{{lead.x}}/p")).toBe("marcador_no_dominio");
+    // Controle: com o host escrito no modelo, a barra a mais não muda nada.
+    expect(montarHref("https:///x.com/?c={{lead.x}}", dados)).not.toBeNull();
   });
 
   it("recusa acima do teto e caractere de controle em qualquer posição", () => {

@@ -132,16 +132,23 @@ export function esquemaDoModelo(bruto: string | null | undefined): string | null
 
 /**
  * `true` se o endereço `http(s)` tem marcador na AUTORIDADE (host, porta,
- * usuário) — tudo entre o `//` e o primeiro `/`, `?`, `#` ou `\\`.
+ * usuário) — tudo entre as barras iniciais e o primeiro `/`, `?`, `#` ou `\\`.
+ *
+ * As barras iniciais são TODAS as `/` e `\\` depois do esquema, não só as duas
+ * primeiras: é assim que o parser do navegador lê `http(s)` (`https:///x` abre o
+ * host `x`). Recortar só `//` deixaria a autoridade vazia aos olhos da régua e
+ * cheia aos olhos do navegador.
  *
  * `encodeURIComponent` não codifica `.`, então um marcador ali deixaria o valor
  * de um campo escolher o domínio para onde o botão leva. O domínio é decisão de
  * quem configura o funil; o dado do cliente só entra depois dele.
  */
 function marcadorNoDominio(cauda: string): boolean {
-  const autoridade = cauda.slice(2).split(/[/?#\\]/, 1)[0] ?? "";
+  const autoridade = cauda.replace(/^[/\\]+/, "").split(/[/?#\\]/, 1)[0] ?? "";
   return autoridade.includes("{{");
 }
+
+const MARCADOR = /\{\{\s*([^{}\s]+)\s*\}\}/g;
 
 /**
  * O modelo de link passa na régua? (gravação E renderização usam ESTA função.)
@@ -328,7 +335,7 @@ function preencher(
   codificar: boolean,
 ): string | null {
   let faltou = false;
-  const saida = cauda.replace(/\{\{\s*([^{}\s]+)\s*\}\}/g, (_literal, bruto: string) => {
+  const saida = cauda.replace(MARCADOR, (_literal, bruto: string) => {
     const valor = valorDoMarcador(bruto, dados);
     if (valor === null) {
       faltou = true;
@@ -380,6 +387,11 @@ export function montarHref(
     try {
       const url = new URL(href);
       if (!url.hostname.includes(".")) return null;
+      // O host do clique é o host do MODELO. Os marcadores viram um texto fixo
+      // para ler o host que quem configurou o funil escreveu; se a interpolação
+      // mudou o host, o dado do cliente escolheu o destino.
+      const doModelo = new URL(`${esquema}${cauda.replace(MARCADOR, "x")}`);
+      if (url.host !== doModelo.host) return null;
     } catch {
       return null;
     }
