@@ -87,12 +87,23 @@ export async function rodadaDaCobranca(admin: SupabaseClient, deps: Dependencias
     }
   }
 
-  const { data: todas, error: erroDaLista } = await admin
-    .from("cobranca_assinaturas")
-    .select("organization_id")
-    .not("organization_id", "is", null);
-  if (erroDaLista) throw new Error(`cobranca: assinaturas ilegíveis (${erroDaLista.code ?? "sem_codigo"})`);
-  for (const { organization_id: org } of (todas ?? []) as Array<{ organization_id: string }>) {
+  const PAGE_SIZE = 1000;
+  const todas: Array<{ organization_id: string }> = [];
+  let inicio = 0;
+  for (let pagina = 0; pagina < 100; pagina++) {
+    const { data: lote, error: erroDoLote } = await admin
+      .from("cobranca_assinaturas")
+      .select("organization_id")
+      .not("organization_id", "is", null)
+      .range(inicio, inicio + PAGE_SIZE - 1);
+    if (erroDoLote) throw new Error(`cobranca: assinaturas ilegíveis (${erroDoLote.code ?? "sem_codigo"})`);
+    const linhasDoLote = (lote ?? []) as Array<{ organization_id: string }>;
+    if (linhasDoLote.length === 0) break;
+    todas.push(...linhasDoLote);
+    inicio += linhasDoLote.length;
+    if (linhasDoLote.length < PAGE_SIZE) break;
+  }
+  for (const { organization_id: org } of todas) {
     if (jaVistas.has(org)) continue;
     try {
       contar(await aplicarRegua(admin, org, deps));
@@ -114,12 +125,21 @@ async function avisarTetoDeIa(admin: SupabaseClient): Promise<number> {
   const tetoDoPlano = new Map(((planos ?? []) as Array<{ id: string; teto_ia_usd_cents: number }>).map((p) => [p.id, p.teto_ia_usd_cents]));
   if (tetoDoPlano.size === 0) return 0;
 
-  const { data: linhas, error: erroDasLinhas } = await admin
-    .from("cobranca_assinaturas")
-    .select("organization_id, plano_id")
-    .in("plano_id", [...tetoDoPlano.keys()]);
-  if (erroDasLinhas) throw new Error(`cobranca: assinaturas com teto ilegíveis (${erroDasLinhas.code ?? "sem_codigo"})`);
-  const comTeto = (linhas ?? []) as Array<{ organization_id: string; plano_id: string }>;
+  const comTeto: Array<{ organization_id: string; plano_id: string }> = [];
+  let inicioTeto = 0;
+  for (let pagina = 0; pagina < 100; pagina++) {
+    const { data: lote, error: erroDoLote } = await admin
+      .from("cobranca_assinaturas")
+      .select("organization_id, plano_id")
+      .in("plano_id", [...tetoDoPlano.keys()])
+      .range(inicioTeto, inicioTeto + 1000 - 1);
+    if (erroDoLote) throw new Error(`cobranca: assinaturas com teto ilegíveis (${erroDoLote.code ?? "sem_codigo"})`);
+    const linhasDoLote = (lote ?? []) as Array<{ organization_id: string; plano_id: string }>;
+    if (linhasDoLote.length === 0) break;
+    comTeto.push(...linhasDoLote);
+    inicioTeto += linhasDoLote.length;
+    if (linhasDoLote.length < 1000) break;
+  }
   if (comTeto.length === 0) return 0;
 
   const { data: orgs, error: erroDasOrgs } = await admin
