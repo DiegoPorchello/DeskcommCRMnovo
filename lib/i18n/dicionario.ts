@@ -9487,7 +9487,7 @@ export const DICIONARIO: Traducoes = {
   // caminho de salvar-e-abrir: uma quando o contato salvo não tem telefone
   // (não há thread 1:1 para abrir) e outra no funil, onde o negócio pode
   // nascer sem pessoa nenhuma.
-  "Salvar e iniciar conversa": { es: "Guardar e iniciar conversa" },
+  "Salvar e iniciar conversa": { es: "Guardar e iniciar conversación" },
   "Contato salvo. Cadastre um telefone para abrir a conversa.": {
     es: "Contacto guardado. Registra un teléfono para abrir la conversación.",
   },
