@@ -48,6 +48,8 @@ import {
  *  4. **Destino que já existe** — renomear para um nome que já está no
  *     vocabulário continua sendo o que é hoje: junta as entradas, guarda a cor
  *     e responde `juntou: true`. Esta migration não inventa junção de etiquetas.
+ *  5. **Fora do vocabulário** — a tela de Tags mostra a grafia digitada, e não
+ *     a minúscula que o contato guarda (`fn_vocabulario_de_tags_pagina`).
  */
 
 const pool = new pg.Pool({
@@ -204,6 +206,34 @@ describe("renomear só na caixa: prospecção -> Prospecção (issue #3507)", ()
     expect(await contatosNoFiltro("qualificado")).toBe(2);
     expect(await tagsDe("crm_leads", GOV_LEAD)).toEqual(["Qualificado"]);
     expect(await vocabulario()).toEqual([{ tag: "Qualificado", cor: "#ab4aba" }]);
+  });
+
+  it("fora do vocabulário, a tela de Tags mostra a grafia DIGITADA, não a minúscula do contato", async () => {
+    // Etiqueta em uso no contato e no negócio, sem entrada no vocabulário: o
+    // nome exibido vem do agrupamento por `lower()`. Depois de renomear só a
+    // caixa, o contato guarda a minúscula (contrato) e o negócio a forma
+    // digitada; a tela tem de mostrar a digitada, senão o renome "não pegou".
+    await semear();
+    await pool.query(
+      "update public.organizations set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{tags}', '[]'::jsonb) where id = $1",
+      [GOV_ORG],
+    );
+    await pool.query("update public.contacts set tags = array['obra-norte'] where id = $1", [GOV_CONTACT_1]);
+    await pool.query("update public.crm_leads set tags = array['obra-norte'] where id = $1", [GOV_LEAD]);
+
+    const r = await operar(GOV_ORG, "renomear", "obra-norte", "OBRA-NORTE", null);
+    expect((r.rows[0].r as Retorno).alterou).toBe(true);
+    expect(await tagsDe("contacts", GOV_CONTACT_1)).toEqual(["obra-norte"]);
+    expect(await tagsDe("crm_leads", GOV_LEAD)).toEqual(["OBRA-NORTE"]);
+
+    const pagina = await pool.query("select public.fn_vocabulario_de_tags_pagina($1,'obra-norte',0,50) as r", [GOV_ORG]);
+    const linhas = (
+      pagina.rows[0].r as { items: { tag: string; no_vocabulario: boolean; uso_em_contatos: number }[] }
+    ).items;
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]?.no_vocabulario).toBe(false);
+    expect(linhas[0]?.uso_em_contatos).toBe(1);
+    expect(linhas[0]?.tag).toBe("OBRA-NORTE");
   });
 
   it("renomear para um nome que já existe continua juntando as entradas do vocabulário e avisando (`juntou`)", async () => {
