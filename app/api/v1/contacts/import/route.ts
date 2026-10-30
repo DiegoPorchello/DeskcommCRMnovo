@@ -36,6 +36,7 @@ import {
 } from "@/lib/contacts/csv";
 import { contactCreateSchemaDoPais } from "@/lib/schemas";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
+import { contatosDonosDosExtras } from "@/lib/channels/contato-por-telefone";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { createClient } from "@/lib/supabase/server";
 
@@ -182,7 +183,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   // ─── Pré-filtro de duplicados contra o banco (uma query por identificador) ──
   //
-  // Os índices únicos são parciais (excluem mesclados/anonimizados), então a
+  // Os índices únicos são parciais (excluem mesclados), então a
   // busca espelha o WHERE do índice — filtrar pelo que o índice não cobre
   // produziria "duplicado" imaginário.
   const phones = candidatos
@@ -199,6 +200,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .from("contacts")
       .select("phone_number")
       .eq("organization_id", orgId)
+      .is("is_merged_into", null)
       .not("phone_number", "is", null)
       .in("phone_number", lookup);
     for (const r of data ?? []) {
@@ -206,12 +208,19 @@ export async function POST(req: NextRequest): Promise<Response> {
         existentes.add(`tel:${v}`);
       }
     }
+    // Número que é EXTRA de uma ficha viva já é contato da org: conta como
+    // duplicado aqui, em vez de chegar ao insert e cair no 23505 do banco.
+    const donosDosExtras = await contatosDonosDosExtras(supabase, orgId, lookup);
+    for (const numero of donosDosExtras.keys()) {
+      for (const v of phoneLookupVariants(numero)) existentes.add(`tel:${v}`);
+    }
   }
   if (emails.length > 0) {
     const { data } = await supabase
       .from("contacts")
       .select("email_normalized")
       .eq("organization_id", orgId)
+      .is("is_merged_into", null)
       .in("email_normalized", emails.map((e) => e.toLowerCase()));
     for (const r of data ?? []) existentes.add(`email:${(r as { email_normalized: string }).email_normalized}`);
   }
