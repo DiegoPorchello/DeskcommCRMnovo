@@ -20,6 +20,8 @@
  *
  *     npx vitest run tests/unit/agenda-duracao-escolhida.test.tsx
  */
+import { readFileSync } from "node:fs";
+
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -168,5 +170,40 @@ describe("valor fora de 5…1440 é barrado AQUI, não no banco", () => {
     fireEvent.change(campoDaDuracao(), { target: { value: "45" } });
     expect(screen.queryByTestId("duracao-invalida")).not.toBeInTheDocument();
     expect(onDuracaoMudar).toHaveBeenLastCalledWith(45);
+  });
+});
+
+/**
+ * SERVIÇO NÃO ESCOLHE DURAÇÃO — e a tela não pode mandar uma.
+ *
+ * A rota recusa QUALQUER `duration_minutes` num tipo com `service_enabled`
+ * (`agenda_duracao_do_servico`), porque ali o comprimento é o da agenda
+ * publicada. O painel, por sua vez, SEMPRE devolve um número em `onConfirmar`.
+ * Se a tela repassasse esse número, toda marcação de serviço pela /app/agenda
+ * voltaria 422 — individual ou coletivo.
+ *
+ * A página não monta em teste (providers, hooks, rede), então a cerca lê o
+ * arquivo, como `agenda-local-e-observacao-na-marcacao.test.ts` faz.
+ */
+describe("num serviço a tela não oferece nem envia duração", () => {
+  const tela = readFileSync("app/app/agenda/_client.tsx", "utf8");
+  const pagina = readFileSync("app/app/agenda/page.tsx", "utf8");
+
+  it("a página marca TODO serviço, não só o coletivo", () => {
+    expect(pagina).toContain("servico: t.service_enabled,");
+  });
+
+  it("o campo some em qualquer serviço — inclusive o individual por profissional", () => {
+    expect(tela).toContain("permiteEscolherDuracao={!remarcandoId && !tipo.servico}");
+  });
+
+  it("o POST de um serviço não leva duration_minutes", () => {
+    const inicio = tela.indexOf("return marcar");
+    const bloco = tela.slice(inicio, tela.indexOf(".then((r) => {", inicio));
+    expect(bloco).toContain("duration_minutes: tipo.servico ? undefined : duracaoDoAtendimento");
+  });
+
+  it("a consulta de horários de um serviço não manda duracao_minutos", () => {
+    expect(tela).toMatch(/duracao_minutos: tipo\.servico\s*\?\s*undefined/);
   });
 });

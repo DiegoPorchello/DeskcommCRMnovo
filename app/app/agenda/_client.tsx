@@ -119,6 +119,12 @@ export function AgendaClient({
     duracaoMin: number;
     donoId: string | null;
     servicoColetivo?: boolean;
+    /**
+     * Qualquer serviço (`service_enabled`), individual ou coletivo. Nele a
+     * duração é da agenda publicada, e a rota recusa `duration_minutes` com
+     * `agenda_duracao_do_servico` — por isso a tela não oferece nem envia.
+     */
+    servico?: boolean;
     localKind: string | null;
     localDetalhes: string | null;
   }>;
@@ -450,7 +456,9 @@ export function AgendaClient({
           // exige. Remarcando, é o comprimento do bloco que vai ser movido;
           // marcando, é a escolha da tela (ou o padrão do serviço). Sem isso a
           // lista e a escrita discordariam sobre o mesmo horário.
-          duracao_minutos: duracaoDoCompromisso ?? duracaoEscolhida ?? tipo.duracaoMin,
+          duracao_minutos: tipo.servico
+            ? undefined
+            : (duracaoDoCompromisso ?? duracaoEscolhida ?? tipo.duracaoMin),
         }
       : null,
   );
@@ -937,7 +945,7 @@ export function AgendaClient({
                   move o bloco e PRESERVA o comprimento que ele já tem. Nos dois,
                   oferecer o campo seria oferecer um caminho que não existe.
                 */
-                permiteEscolherDuracao={!remarcandoId && !tipo.servicoColetivo}
+                permiteEscolherDuracao={!remarcandoId && !tipo.servico}
                 onDuracaoMudar={setDuracaoEscolhida}
                 // O LOCAL e o FUSO de verdade, que a tela tinha e não passava.
                 //
@@ -1025,7 +1033,9 @@ export function AgendaClient({
                       // mandar o horário sem ela marcaria 30 minutos num bloco
                       // que a pessoa pediu de 90 — o servidor devolveria 422 e a
                       // tela teria mostrado a lista certa para a pergunta errada.
-                      duration_minutes: duracaoDoAtendimento,
+                      // Num serviço ela NÃO vai: o comprimento é o da agenda
+                      // publicada e a rota recusa qualquer duration_minutes ali.
+                      duration_minutes: tipo.servico ? undefined : duracaoDoAtendimento,
                       guest_email: convidado,
                       location_details: endereco.trim(),
                       description: observacao.trim() || undefined,
