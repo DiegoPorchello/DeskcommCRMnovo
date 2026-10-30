@@ -19,10 +19,14 @@ export interface Sector {
 
 const SECTORS_KEY = ["team", "sectors"] as const;
 
-/** Setores de atendimento da org (qualquer membro lê). */
-export function useSectors() {
+/**
+ * Setores de atendimento da org (qualquer membro lê). `ligado = false` quando o
+ * módulo opcional está desligado (doc 213): a rota responderia 404, então nem pergunta.
+ */
+export function useSectors(ligado = true) {
   return useQuery({
     queryKey: SECTORS_KEY,
+    enabled: ligado,
     queryFn: async () => apiClient.get<{ data: Sector[] }>("/api/v1/attendants/sectors"),
     staleTime: 30_000,
   });

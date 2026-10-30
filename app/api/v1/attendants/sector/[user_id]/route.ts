@@ -19,6 +19,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
+import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
 import { requireRole } from "@/lib/auth/require-role";
 import { sectorAssignmentSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,6 +35,8 @@ export async function PUT(
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
+  const desligado = await seSetoresDesligado(requestId);
+  if (desligado) return desligado;
   const authz = await requireRole("manager", { requestId, resource: "attendant_sector_members" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);

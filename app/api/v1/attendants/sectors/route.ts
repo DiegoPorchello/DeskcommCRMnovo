@@ -19,8 +19,9 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
+import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
 import { requireRole } from "@/lib/auth/require-role";
-import { ROLE_RANK, type Role } from "@/lib/auth/types";
+import { roleAtLeast, type Role } from "@/lib/auth/types";
 import { sectorCreateSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -32,6 +33,8 @@ const SELECT_COLS = "id, name, description, created_at, updated_at";
 
 export async function GET(_req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
+  const desligado = await seSetoresDesligado(requestId);
+  if (desligado) return desligado;
   const authz = await requireRole("viewer", { requestId, resource: "attendant_sectors" });
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
@@ -59,7 +62,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
 
   const activeUserIds = new Set(
     ((active.data ?? []) as Array<{ user_id: string; role: Role }>)
-      .filter((a) => ROLE_RANK[a.role] >= ROLE_RANK.agent)
+      .filter((a) => roleAtLeast(a.role, "agent"))
       .map((a) => a.user_id),
   );
   const countBySector = new Map<string, number>();
@@ -79,6 +82,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
+  const desligado = await seSetoresDesligado(requestId);
+  if (desligado) return desligado;
   const authz = await requireRole("manager", { requestId, resource: "attendant_sectors" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);

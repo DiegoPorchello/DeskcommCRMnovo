@@ -19,6 +19,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
+import { seSetoresDesligado } from "@/lib/atendimento/setores-modulo";
 import { requireRole } from "@/lib/auth/require-role";
 import { sectorPatchSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,6 +38,8 @@ export async function PATCH(
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
+  const desligado = await seSetoresDesligado(requestId);
+  if (desligado) return desligado;
   const authz = await requireRole("manager", { requestId, resource: "attendant_sectors" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
@@ -98,6 +101,8 @@ export async function DELETE(
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
+  const desligado = await seSetoresDesligado(requestId);
+  if (desligado) return desligado;
   const authz = await requireRole("manager", { requestId, resource: "attendant_sectors" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);

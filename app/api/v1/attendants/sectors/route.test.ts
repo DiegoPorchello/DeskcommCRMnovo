@@ -9,6 +9,9 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
+// Módulo `setores` ligado (doc 213): o desligado tem arquivo próprio,
+// tests/unit/setores-modulo-desligado.test.ts.
+vi.mock("@/lib/instalacao/modulos", () => ({ moduloLigado: vi.fn(async () => true) }));
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const ATIVO = "22222222-2222-4222-8222-222222222222";

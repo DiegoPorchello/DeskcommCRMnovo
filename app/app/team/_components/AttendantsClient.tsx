@@ -613,19 +613,21 @@ function RoutingCard({ canManage }: { canManage: boolean }) {
 interface Props {
   canManage: boolean;
   organizationTimezone?: string;
+  /** Módulo opcional `setores` (doc 213). Desligado: sem coluna, sem filtro, sem leitura. */
+  setoresLigado: boolean;
 }
 
 /** No celular o cabeçalho some: o rótulo da coluna vem do `data-rotulo` da célula. */
 const ROTULO_NO_CELULAR =
   "max-md:before:mr-1.5 max-md:before:text-xs max-md:before:text-muted-foreground max-md:before:content-[attr(data-rotulo)]";
 
-export function AttendantsClient({ canManage, organizationTimezone }: Props) {
+export function AttendantsClient({ canManage, organizationTimezone, setoresLigado }: Props) {
   const t = useT();
   const avail = useAttendants();
   const patch = useUpdateAvailability();
   const [scheduleFor, setScheduleFor] = useState<Attendant | null>(null);
   const [filtroSetor, setFiltroSetor] = useState<string>(TODOS_OS_SETORES);
-  const sectorsQuery = useSectors();
+  const sectorsQuery = useSectors(setoresLigado);
   const sectors = useMemo(() => sectorsQuery.data?.data ?? [], [sectorsQuery.data]);
   const now = useMemo(() => new Date(), []);
 
@@ -711,7 +713,7 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
             <TableHeader className="max-md:hidden">
               <TableRow>
                 <TableHead>{t("Atendente")}</TableHead>
-                <TableHead>{t("Setor")}</TableHead>
+                {setoresLigado ? <TableHead>{t("Setor")}</TableHead> : null}
                 <TableHead>Status</TableHead>
                 <TableHead>{t("Carga")}</TableHead>
                 <TableHead>{t("Capacidade")}</TableHead>
@@ -722,7 +724,7 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
             <TableBody className="max-md:block">
               {visiveis.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 7 : 6} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={(canManage ? 6 : 5) + (setoresLigado ? 1 : 0)} className="text-sm text-muted-foreground">
                     {t("Nenhum atendente neste setor.")}
                   </TableCell>
                 </TableRow>
@@ -742,12 +744,14 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
                         <div className="text-xs text-muted-foreground">{a.email}</div>
                       ) : null}
                     </TableCell>
-                    <TableCell
-                      data-rotulo={t("Setor")}
-                      className={`max-md:flex max-md:items-center max-md:p-0 ${ROTULO_NO_CELULAR}`}
-                    >
-                      <SectorCell attendant={a} sectors={sectors} canManage={canManage} />
-                    </TableCell>
+                    {setoresLigado ? (
+                      <TableCell
+                        data-rotulo={t("Setor")}
+                        className={`max-md:flex max-md:items-center max-md:p-0 ${ROTULO_NO_CELULAR}`}
+                      >
+                        <SectorCell attendant={a} sectors={sectors} canManage={canManage} />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="max-md:p-0">
                       <div className="flex flex-col items-start gap-1.5">
                         <StatusBadge attendant={a} now={now} />
