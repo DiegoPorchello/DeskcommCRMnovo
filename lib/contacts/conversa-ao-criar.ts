@@ -63,9 +63,10 @@ import { logger } from "@/lib/logger";
 /**
  * As portas que criam contato, e só elas.
  *
- * `manual` é a criação de UMA ficha por vez — o `POST /api/v1/contacts`, a
- * ferramenta MCP que o reusa e a prospecção, que cria o contato e sai
- * conversando com ele na mesma rodada. `importacao_csv` é a planilha, que é o
+ * `manual` é a criação de UMA ficha por vez — o `POST /api/v1/contacts` e a
+ * prospecção, que cria o contato e sai conversando com ele na mesma rodada.
+ * O MCP não passa por aqui: abre conversa por `openSharedContactConversation`,
+ * com a sessão escolhida por quem chama. `importacao_csv` é a planilha, que é o
  * único caminho em que "abrir conversa" acontece centenas de vezes de uma vez.
  */
 export type PortaDaCriacao = "manual" | "importacao_csv";
