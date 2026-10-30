@@ -623,6 +623,12 @@ export const DICIONARIO: Traducoes = {
   },
   "Regra": { es: "Regla" },
   "Telefone": { es: "Teléfono" },
+  // Spec 31 (B1): os telefones da ficha. "Fixo", "Celular" e "Outro" já existem acima.
+  "Principal": { es: "Principal" },
+  "Tem WhatsApp": { es: "Tiene WhatsApp" },
+  "Sem WhatsApp": { es: "Sin WhatsApp" },
+  "WhatsApp: não sabemos": { es: "WhatsApp: no sabemos" },
+  "Veio da junção de fichas": { es: "Vino de la unión de fichas" },
   "Pontuação": { es: "Puntuación" },
   // #2642 — formulário da ação notify_team, depois do recorte: o destino é o
   // número de Avisos e não há mais escolha de pessoa nem de canal.
