@@ -321,6 +321,11 @@ export function TemplatesClient({ canShare, currentUserId }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        {/* A ação principal vem PRIMEIRO: o grupo é opcional, e quem chega à
+            tela procurando "criar" acha a resposta rápida antes do grupo. */}
+        <Button type="button" onClick={openNew} className="w-full sm:w-auto">
+          <Plus /> {t("Nova resposta rápida")}
+        </Button>
         {/* Só `manager+` cria grupo: é estrutura da organização, e a policy
             `message_template_groups_write` cobra o mesmo (migration 0808). */}
         {canShare && (
@@ -333,9 +338,6 @@ export function TemplatesClient({ canShare, currentUserId }: Props) {
             <Plus /> {t("Novo grupo")}
           </Button>
         )}
-        <Button type="button" onClick={openNew} className="w-full sm:w-auto">
-          <Plus /> {t("Nova resposta rápida")}
-        </Button>
       </div>
       {!templates?.length ? (
         <p className="text-sm text-muted-foreground">{t("Nenhuma resposta rápida ainda.")}</p>

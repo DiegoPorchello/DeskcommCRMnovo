@@ -1,8 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
-import { ehRecursoDeAudio, recursosDaBarra, type Recurso } from "@/lib/inbox/recursos";
+import { recursosDaBarra, type Recurso } from "@/lib/inbox/recursos";
 import { secoesDeRespostas, type GrupoDeRespostas } from "@/lib/templates/grupos";
+import {
+  lerRespostaRapidaGravada,
+  type ConteudoDeRespostaRapida,
+  type LeituraDeRespostaRapida,
+} from "@/lib/inbox/resposta-rapida";
 import {
   RECURSOS_VISIVEIS_RECOLHIDA,
   armazenamentoDoNavegador,
@@ -40,6 +45,19 @@ import {
  * A leitura é num `useEffect`, não na inicialização do estado: o `localStorage`
  * não existe no servidor, e ler no render faria o HTML nascer recolhido e pular
  * para aberto na hidratação. É o mesmo desenho das divisórias do Inbox (#2579).
+ *
+ * ─── O ÍCONE É A RÉGUA, NÃO UM `if` DE ÁUDIO (#3009) ────────────────────────
+ *
+ * O botão diz o que o clique prepara: só texto (o título, como sempre), imagem,
+ * áudio, ou a combinação. Quem responde isso é `lerRespostaRapidaGravada` — a
+ * MESMA régua que o envio (`Composer.applyTemplate`) consulta para recusar uma
+ * resposta vazia. Um `if` de áudio aqui e outro no compositor foi exatamente o
+ * que deixou texto+áudio e imagem+áudio sem existir: cada lado via o recurso de
+ * um jeito.
+ *
+ * O que NÃO mudou: resposta só de texto continua saindo como `título`, sem
+ * ícone nenhum, e só de áudio continua com o 🎧 na frente — o caso de 99% da
+ * base sai byte a byte como antes.
  */
 interface Props {
   recursos: Recurso[];
@@ -62,6 +80,29 @@ interface Props {
    * existe para esta empresa, e a barra é a de hoje, byte a byte.
    */
   grupos?: GrupoDeRespostas[] | null;
+}
+
+/**
+ * O ícone de cada conteúdo DE MÍDIA. O texto não tem ícone de propósito: ele é
+ * o próprio título do botão, e um 📝 na frente mudaria o rótulo de toda resposta
+ * rápida de texto — o caso que não podia mudar de aparência.
+ */
+const ICONE_DO_CONTEUDO: Record<Exclude<ConteudoDeRespostaRapida, "texto">, string> = {
+  imagem: "🖼",
+  audio: "🎧",
+};
+
+/**
+ * O rótulo do botão: os ícones das mídias que o clique prepara, na ordem
+ * canônica (imagem, áudio), e o título. Sem mídia, o título SOZINHO — é o
+ * rótulo de antes, byte a byte.
+ */
+function rotuloDoBotao(leitura: LeituraDeRespostaRapida, titulo: string): string {
+  if (!leitura.ok) return titulo;
+  const icones = leitura.conteudos
+    .filter((conteudo): conteudo is Exclude<ConteudoDeRespostaRapida, "texto"> => conteudo !== "texto")
+    .map((conteudo) => ICONE_DO_CONTEUDO[conteudo]);
+  return icones.length ? `${icones.join("")} ${titulo}` : titulo;
 }
 
 export function BarraDeRecursos({
@@ -200,17 +241,25 @@ function BotaoDeRecurso({
   onEscolher: (recurso: Recurso) => void;
 }) {
   const t = useT();
+  // A régua decide o rótulo, o `data-recurso-tipo` e o motivo do título — os
+  // três leem a MESMA leitura, e o envio lê a mesma função (#3009).
+  const leitura = lerRespostaRapidaGravada(recurso);
+  // O bloqueio do compositor e a invalidade do conteúdo são informações
+  // diferentes: quando coexistem, nenhuma pode esconder a outra.
+  const motivos = [dica, leitura.ok ? undefined : t(leitura.motivo)].filter(
+    (motivo): motivo is string => motivo !== undefined,
+  );
   return (
     <button
       type="button"
       disabled={disabled}
       data-recurso-id={recurso.id}
-      data-recurso-tipo={ehRecursoDeAudio(recurso) ? "audio" : "texto"}
+      data-recurso-tipo={leitura.ok ? leitura.tipo : "invalida"}
       onClick={() => onEscolher(recurso)}
-      title={dica ?? t("Prepara no compositor — você revisa e envia")}
+      title={motivos.length ? motivos.join(" — ") : t("Prepara no compositor — você revisa e envia")}
       className="rounded-full border border-border bg-muted/60 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
     >
-      {ehRecursoDeAudio(recurso) ? `🎧 ${recurso.title}` : recurso.title}
+      {rotuloDoBotao(leitura, recurso.title)}
     </button>
   );
 }

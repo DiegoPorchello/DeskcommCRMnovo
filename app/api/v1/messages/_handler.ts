@@ -54,6 +54,11 @@ import {
 } from "@/lib/messaging/contact-card";
 import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
+import {
+  MENSAGEM_DO_NUMERO,
+  quadroDoNumero,
+  vereditoDoNumero,
+} from "@/lib/channels/numero-do-atendente";
 import { emitirFalhaDeEntrega } from "@/lib/messaging/falha-de-entrega";
 import { previaDaMensagem } from "@/lib/messaging/previa-da-mensagem";
 import { aplicarAssinatura, configAssinatura, linhaDeAssinatura } from "@/lib/messaging/assinatura";
@@ -61,6 +66,7 @@ import { nomeDoAgenteDeIA } from "@/lib/messaging/nome-do-agente-de-ia";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { nomesDosAtendentes } from "@/lib/users/nome-do-atendente";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enderecoDaUltimaRecebida } from "@/lib/channels/endereco-da-ultima-recebida";
 import type { Message } from "@/lib/types/messaging";
 
 type SB = SupabaseClient;
@@ -555,6 +561,59 @@ export async function sendMessageHandler(
     );
   }
 
+  // ─── De quem é o número desta conversa (#3642) ─────────────────────────────
+  //
+  // O envio sai pela sessão da CONVERSA (`c.channel_session_id`), e essa sessão é
+  // o telefone de uma PESSOA. Numa instalação com um número por vendedor, quem
+  // não responde por esse número não fala por ele: depois de uma transferência
+  // (ou de uma troca de carteira), o vendedor novo respondia pelo WhatsApp do
+  // colega — a mensagem saía pelo número do antigo e a resposta do cliente ia
+  // para o celular dele.
+  //
+  // A troca de dono já leva o número junto (`fn_numero_da_transferencia`,
+  // migration 9039). O que sobra para esta guarda é quem TEM número próprio
+  // conectado e está numa conversa no número de outra pessoa (o contato já tinha
+  // conversa no número dele, ou a conversa é anterior a esta regra): aí o envio
+  // recusa ALTO — nunca sai pelo número do colega. Quem não tem número segue
+  // respondendo como hoje (doc 237, escolha 1-B), e organização sem um número
+  // por vendedor não muda nada aqui (é o controle da regra).
+  //
+  // Só ator HUMANO: token de integração e IA não são "a pessoa do número" — o
+  // defeito é de quem digita no Inbox, e restringir a regra a ele deixa os
+  // caminhos automáticos exatamente como estavam.
+  if (ctx.actor.type === "user") {
+    const numero = await quadroDoNumero(supabase, {
+      organizationId: ctx.organization_id,
+      channelSessionId: c.channel_session_id ?? null,
+      provider: c.channel_sessions?.provider ?? null,
+      userId: ctx.actor.id,
+    });
+    if (numero.leitura === "indisponivel") {
+      // Falha FECHADA: um erro transitório não pode reabrir o vazamento em
+      // silêncio, e nada foi enviado.
+      throw new ApiError(
+        503,
+        "numero_do_atendente_indisponivel",
+        undefined,
+        ctx.requestId,
+        traduzir(
+          "Não foi possível conferir o número desta conversa. Nada foi enviado.",
+          ctx.idioma ?? "pt-BR",
+        ),
+      );
+    }
+    const veredito = vereditoDoNumero(numero.quadro);
+    if (!veredito.ok) {
+      throw new ApiError(
+        409,
+        veredito.codigo,
+        { channel_session_id: c.channel_session_id },
+        ctx.requestId,
+        traduzir(MENSAGEM_DO_NUMERO[veredito.codigo], ctx.idioma ?? "pt-BR"),
+      );
+    }
+  }
+
   // ─── A janela de 24h, ANTES de qualquer linha nascer (#1614) ──────────────
   //
   // Em canal com hetero-restrição, texto livre só sai enquanto o cliente
@@ -933,12 +992,23 @@ export async function sendMessageHandler(
   // (`conversations.channel_session_id` é NOT NULL com FK ON DELETE RESTRICT),
   // e ainda assim mantido para não trocar o desfecho desse ramo defensivo.
   const adapter = getAdapter(c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER);
+  // Ficha com telefone extra: a resposta volta pelo número que a pessoa escreveu.
+  // A porta de canal decide quem tem isso. A organização vem de `ctx` (fonte
+  // confiável), não do corpo.
+  const ultimoRecebidoChatId = await enderecoDaUltimaRecebida(supabase, {
+    provider: c.channel_sessions?.provider,
+    isGroup: c.is_group,
+    organizationId: ctx.organization_id,
+    conversationId: c.id,
+    contactId: c.contact_id,
+  });
   const chatId = adapter.resolveRecipient({
     isGroup: c.is_group,
     groupChatId: c.group_chat_id,
     phoneNumber: c.contacts?.phone_number,
     waIdentity: c.contacts?.wa_identity,
     waLid: c.contacts?.wa_lid,
+    ultimoRecebidoChatId,
   });
 
   // Releitura no sink: o operador pode ter fechado o canal enquanto o modelo
