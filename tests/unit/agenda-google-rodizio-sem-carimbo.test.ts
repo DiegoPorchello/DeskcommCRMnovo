@@ -261,7 +261,7 @@ describe("rodízio da rodada: a rota, com o banco de mentira", () => {
     expect(banco.paginas[0]).toHaveLength(LOTE_DE_CONEXOES);
     expect(banco.paginas[1]).toHaveLength(LOTE_DE_CONEXOES);
     const primeira = new Set(banco.paginas[0]);
-    expect(banco.paginas[1].filter((id) => primeira.has(id))).toEqual([]);
+    expect((banco.paginas[1] ?? []).filter((id) => primeira.has(id))).toEqual([]);
     // O ponto da issue: rodada ociosa não escreve NADA na conexão.
     expect(banco.escritasNaConexao).toEqual([]);
     // O rodízio não voltou a se apoiar no carimbo.
