@@ -63,6 +63,16 @@ interface FormShape {
   custom_fields?: Record<string, unknown>;
 }
 
+const CAMPOS_DO_ENDERECO = [
+  "zip_code",
+  "street",
+  "number",
+  "complement",
+  "district",
+  "city",
+  "state",
+] as const;
+
 /** O rótulo de cada tipo, na língua da tela — a chave é o valor da coluna. */
 const ROTULO_DO_TIPO: Record<ContactType, string> = {
   cliente: "Cliente",
@@ -210,14 +220,14 @@ export function EditContactDialog({
     // exigem), então o diálogo não normaliza nada — o que se digita é o que se
     // grava, e a ficha recarregada mostra a MESMA string.
     if (values.birthdate?.trim()) payload.birthdate = values.birthdate.trim();
-    // Endereço (issue 3494): só manda quando preenchido.
-    if (values.zip_code?.trim()) payload.zip_code = values.zip_code.trim();
-    if (values.street?.trim()) payload.street = values.street.trim();
-    if (values.number?.trim()) payload.number = values.number.trim();
-    if (values.complement?.trim()) payload.complement = values.complement.trim();
-    if (values.district?.trim()) payload.district = values.district.trim();
-    if (values.city?.trim()) payload.city = values.city.trim();
-    if (values.state?.trim()) payload.state = values.state.trim();
+    // Endereço (issue 3494): manda o que foi preenchido e `null` no campo que a
+    // ficha tinha e foi esvaziado — sem isso, apagar só o Complemento e salvar
+    // deixava o valor antigo no banco (medido na prova pela tela do #3670).
+    for (const campo of CAMPOS_DO_ENDERECO) {
+      const valor = values[campo]?.trim();
+      if (valor) payload[campo] = valor;
+      else if (contact[campo]) payload[campo] = null;
+    }
     // O TIPO (issue 3005): sempre no payload, porque é ele que o `Select`
     // acabou de mostrar — quem abriu a ficha como cliente e salvou continua
     // cliente; quem trocou para fornecedor grava fornecedor.

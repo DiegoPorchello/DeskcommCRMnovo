@@ -79,7 +79,7 @@ export const contactCreateSchema = z.object({
   complement: z.string().max(120).optional().nullable(),
   district: z.string().max(120).optional().nullable(),
   city: z.string().max(120).optional().nullable(),
-  state: z.string().max(2).optional().nullable(),
+  state: z.string().max(2, "UF com 2 letras (ex.: SP)").optional().nullable(),
   // O papel do contato (issue 3005): ausente = o default do BANCO ('cliente'),
   // e por isso `contactPatchSchema` também o deixa opcional — um PATCH que só
   // troca o nome não reescreve o tipo de um fornecedor.
