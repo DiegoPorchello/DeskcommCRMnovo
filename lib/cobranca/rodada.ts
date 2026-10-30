@@ -36,6 +36,7 @@ export const LIMITE_DA_RECONCILIACAO = 50;
 const LIMIAR_DO_AVISO_DE_IA = 0.8;
 // Teto de linhas por resposta do PostgREST (max_rows) numa instalação padrão.
 const PAGE_SIZE = 1000;
+const LOTE_DE_EMPRESAS = 200;
 
 interface Reconciliavel {
   organization_id: string;
@@ -146,13 +147,20 @@ async function avisarTetoDeIa(admin: SupabaseClient): Promise<number> {
   }
   if (comTeto.length === 0) return 0;
 
-  const { data: orgs, error: erroDasOrgs } = await admin
-    .from("organizations")
-    .select("id, status, locale")
-    .in("id", comTeto.map((l) => l.organization_id));
-  if (erroDasOrgs) throw new Error(`cobranca: empresas ilegíveis (${erroDasOrgs.code ?? "sem_codigo"})`);
+  // Em lotes: um .in() único com todas as empresas também seria cortado em
+  // max_rows, e mil UUIDs na query string passam do limite de URL do proxy.
+  const ids = comTeto.map((l) => l.organization_id);
+  const orgs: Array<{ id: string; status: string; locale: string | null }> = [];
+  for (let i = 0; i < ids.length; i += LOTE_DE_EMPRESAS) {
+    const { data: lote, error: erroDasOrgs } = await admin
+      .from("organizations")
+      .select("id, status, locale")
+      .in("id", ids.slice(i, i + LOTE_DE_EMPRESAS));
+    if (erroDasOrgs) throw new Error(`cobranca: empresas ilegíveis (${erroDasOrgs.code ?? "sem_codigo"})`);
+    orgs.push(...((lote ?? []) as typeof orgs));
+  }
   const idiomaDe = new Map<string, Idioma>(
-    ((orgs ?? []) as Array<{ id: string; status: string; locale: string | null }>)
+    orgs
       .filter((o) => ehOperante(o.status))
       .map((o) => [o.id, normalizarIdioma(o.locale)]),
   );
