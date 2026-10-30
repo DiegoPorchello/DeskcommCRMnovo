@@ -366,6 +366,17 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "outra organização lê 0 nos dois sentidos e INSERT direto de authenticated " +
       "dá permission denied. Migration 0661 (issue #2542).",
   },
+  {
+    tabela: "message_template_groups",
+    razao:
+      "tests/invariants/grupos-de-resposta-rapida-rls.test.ts (migration 0808, #3245) — " +
+      "leitura positiva dos quatro papéis na organização própria e ZERO do vizinho " +
+      "(linha real semeada noutra organização, com controle de que ela existe); " +
+      "agent e viewer sem INSERT/UPDATE/DELETE efetivo; manager cria, renomeia e apaga; " +
+      "anon com permission denied por GRANT ausente; GRANT explícito a authenticated " +
+      "conferido no catálogo; FK composta recusa resposta apontando para grupo de outra " +
+      "organização e on delete set null (grupo_id) devolve a resposta à lista plana sem apagá-la.",
+  },
 ];
 
 /**

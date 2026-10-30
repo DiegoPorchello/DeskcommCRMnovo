@@ -18493,6 +18493,34 @@ export const DICIONARIO: Traducoes = {
   "Botões no card do negócio que abrem outro sistema com o dado do cliente já preenchido. Aceitam tel:, http:// e https://. Marcadores: {{telefone}}, {{nome}}, {{primeiro_nome}}, {{email}} e {{documento}}; campos personalizados entram como {{chave}}, {{lead.chave}} ou {{contact.chave}}.": {
     es: "Botones en la tarjeta del negocio que abren otro sistema con el dato del cliente ya rellenado. Aceptan tel:, http:// y https://. Marcadores: {{telefone}}, {{nome}}, {{primeiro_nome}}, {{email}} y {{documento}}; los campos personalizados entran como {{chave}}, {{lead.chave}} o {{contact.chave}}.",
   },
+
+  // ─── Grupos de respostas rápidas (#3245) ─────────────────────────────────
+  "Novo grupo": { es: "Nuevo grupo" },
+  "Sem grupo": { es: "Sin grupo" },
+  "Nenhuma resposta neste grupo.": { es: "Ninguna respuesta en este grupo." },
+  "Renomear grupo": { es: "Renombrar grupo" },
+  "Excluir grupo": { es: "Eliminar grupo" },
+  "Mover grupo para cima": { es: "Mover grupo hacia arriba" },
+  "Mover grupo para baixo": { es: "Mover grupo hacia abajo" },
+  "Grupos organizam as respostas por etapa da venda. Eles são opcionais.": {
+    es: "Los grupos organizan las respuestas por etapa de la venta. Son opcionales.",
+  },
+  "Nome do grupo": { es: "Nombre del grupo" },
+  "Atendimento inicial": { es: "Atención inicial" },
+  "Grupo criado.": { es: "Grupo creado." },
+  "Grupo renomeado.": { es: "Grupo renombrado." },
+  "Grupo excluído. As respostas dele continuam na lista.": {
+    es: "Grupo eliminado. Sus respuestas siguen en la lista.",
+  },
+  "Grupo (opcional)": { es: "Grupo (opcional)" },
+  "Organize as respostas por etapa da venda. Sem grupo, ela continua na lista de sempre.": {
+    es: "Organiza las respuestas por etapa de la venta. Sin grupo, sigue en la lista de siempre.",
+  },
+  "Já existe um grupo com esse nome.": { es: "Ya existe un grupo con ese nombre." },
+  "Grupo não encontrado.": { es: "Grupo no encontrado." },
+  "Grupo que não pertence a esta organização.": {
+    es: "Grupo que no pertenece a esta organización.",
+  },
 };
 
 /**
