@@ -301,3 +301,44 @@ describe("sessaoDosCookies — identidade para o cache, nunca autorização", ()
     expect(fatiado!.chave).not.toBe(sessaoDosCookies([inteiro])!.chave);
   });
 });
+
+describe("a invalidação alcança o leitor de verdade", () => {
+  it("invalidar pela ROTA derruba o que a PÁGINA guardou (duas instâncias do módulo)", async () => {
+    // O Next carrega este módulo uma vez no runtime de rotas e outra no de
+    // páginas, no mesmo processo. `resetModules` reproduz isso: dois imports,
+    // duas instâncias. Quem grava o vínculo é a rota; quem lê é a página.
+    vi.resetModules();
+    const pagina = await import("./cache-curto");
+    vi.resetModules();
+    const rota = await import("./cache-curto");
+    expect(rota).not.toBe(pagina); // controle: são instâncias distintas
+
+    const carregar = vi.fn(async () => ({ interface: "velha" }));
+    const ler = () =>
+      pagina.comCacheCurto({ chave: "permissoes:u1", etiquetas: [pagina.etiquetaDeUsuario("u1")], carregar });
+
+    await ler();
+    rota.invalidarUsuario("u1");
+    await ler();
+
+    expect(carregar).toHaveBeenCalledTimes(2);
+  });
+
+  it("carga em voo durante a escrita não reinstala o valor velho", async () => {
+    let soltar!: (v: string) => void;
+    const lenta = vi.fn(() => new Promise<string>((r) => (soltar = r)));
+    const emVoo = comCacheCurto({ chave: "permissoes:u1", etiquetas: [etiquetaDeUsuario("u1")], carregar: lenta });
+
+    // A escrita invalida (antes e depois do UPDATE) enquanto a leitura ainda não voltou.
+    invalidarUsuario("u1");
+    invalidarUsuario("u1");
+    soltar("pre-escrita");
+    expect(await emVoo).toBe("pre-escrita"); // esta requisição já estava a caminho
+
+    const fresca = vi.fn(async () => "pos-escrita");
+    expect(
+      await comCacheCurto({ chave: "permissoes:u1", etiquetas: [etiquetaDeUsuario("u1")], carregar: fresca }),
+    ).toBe("pos-escrita");
+    expect(fresca).toHaveBeenCalledTimes(1);
+  });
+});

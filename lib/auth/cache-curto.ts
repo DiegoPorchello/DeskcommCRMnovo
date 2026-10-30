@@ -84,9 +84,40 @@ interface Entrada {
   expiraEm: number;
 }
 
-const entradas = new Map<string, Entrada>();
-/** etiqueta → chaves, para invalidar por identidade sem varrer o mapa. */
-const porEtiqueta = new Map<string, Set<string>>();
+/**
+ * O estado mora no `globalThis`, e não em `const` deste módulo — a diferença não
+ * é estilo. O Next instancia este módulo DUAS vezes no mesmo processo: um
+ * runtime para `route.js` (`chunks/`) e outro para `page.js` e server actions
+ * (`chunks/ssr/`) — medido em `lib/branding/instalacao.ts`. Com `const`, a
+ * invalidação feita por uma rota (`/api/v1/team/[user_id]/interface`,
+ * `/api/v1/admin/tenants/[id]/reactivate`…) zerava o mapa da ROTA, e a tela
+ * seguia lendo o mapa da PÁGINA por até um TTL inteiro (e2e do #3712).
+ */
+interface EstadoDoCacheCurto {
+  entradas: Map<string, Entrada>;
+  /** etiqueta → chaves, para invalidar por identidade sem varrer o mapa. */
+  porEtiqueta: Map<string, Set<string>>;
+  /** chave → etiquetas (índice reverso, para o esquecimento). */
+  etiquetasPorChave: Map<string, Set<string>>;
+  /**
+   * Sobe a cada invalidação. Uma carga que começou ANTES de uma escrita volta
+   * com o valor pré-escrita; se a geração mudou no meio, ela não grava — senão
+   * reinstalaria o valor velho por um TTL inteiro, desfazendo a invalidação.
+   */
+  geracao: number;
+}
+
+declare global {
+  var __cacheCurtoDaAutorizacao: EstadoDoCacheCurto | undefined;
+}
+
+const estado: EstadoDoCacheCurto = (globalThis.__cacheCurtoDaAutorizacao ??= {
+  entradas: new Map(),
+  porEtiqueta: new Map(),
+  etiquetasPorChave: new Map(),
+  geracao: 0,
+});
+const { entradas, porEtiqueta, etiquetasPorChave } = estado;
 
 const relogio = () => Date.now();
 
@@ -145,6 +176,7 @@ export function invalidarSessao(chaveDaSessao: string): void {
 
 /** Derruba qualquer chave exata (o `sessao:<hash>` é o caso de uso). */
 export function invalidarChave(chave: string): void {
+  estado.geracao += 1;
   try {
     esquecerChave(chave);
   } catch {
@@ -159,8 +191,10 @@ export function invalidarChave(chave: string): void {
  * um eventual `SIGUSR` de operação; nada em produção chama isto por rotina.
  */
 export function esquecerTudo(): void {
+  estado.geracao += 1;
   entradas.clear();
   porEtiqueta.clear();
+  etiquetasPorChave.clear();
 }
 
 function esquecerChave(chave: string): void {
@@ -171,6 +205,7 @@ function esquecerChave(chave: string): void {
 }
 
 function esquecerEtiqueta(etiqueta: string): void {
+  estado.geracao += 1;
   const chaves = porEtiqueta.get(etiqueta);
   if (!chaves) return;
   // Cópia: apagar de `porEtiqueta` enquanto se percorre o Set é o tipo de
@@ -178,8 +213,6 @@ function esquecerEtiqueta(etiqueta: string): void {
   for (const chave of [...chaves]) esquecerChave(chave);
 }
 
-/** As etiquetas de uma chave, lidas do índice reverso (para o esquecimento). */
-const etiquetasPorChave = new Map<string, Set<string>>();
 
 function etiquetasDe(chave: string): string[] {
   return [...(etiquetasPorChave.get(chave) ?? [])];
@@ -314,9 +347,10 @@ export async function comCacheCurto<T>({
   // --- caminho da carga --------------------------------------------------
   // Fora do `try`: erro de carga é incidente de verdade (PostgREST fora do ar,
   // RPC recusando) e precisa subir para quem chamou, como antes do cache.
+  const geracaoNaCarga = estado.geracao;
   const valor = await carregar();
 
-  if (ttlMs > 0 && expiraEm > agora && (!guardar || guardar(valor))) {
+  if (ttlMs > 0 && expiraEm > agora && estado.geracao === geracaoNaCarga && (!guardar || guardar(valor))) {
     try {
       const todas = [...etiquetas, ...(etiquetasDoValor?.(valor) ?? [])];
       gravar(chave, copiar(valor), todas, expiraEm, agora);

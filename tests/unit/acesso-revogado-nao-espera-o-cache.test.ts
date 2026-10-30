@@ -304,6 +304,13 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
     "app/actions/settings/signOutEverywhere.ts",
     "lib/auth/aplicar-convite.ts",
     "lib/auth/provision.ts",
+    // Colunas da empresa que viajam no snapshot (nome, idioma, fuso, moeda, país).
+    "lib/tenants/dados-cadastrais.ts",
+    "app/actions/onboarding/_shared.ts",
+    // Metadata da pessoa (idioma, nome, e-mail) — o `getUser` também está no cache.
+    "app/actions/settings/trocarIdioma.ts",
+    "app/actions/settings/updateProfile.ts",
+    "app/api/v1/admin/tenants/[id]/members/[userId]/email/route.ts",
   ];
 
   it.each(ESCRITAS_DE_AUTORIZACAO)("%s invalida o cache curto", (relativo) => {
@@ -349,6 +356,42 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
 
     // Caminho novo de vínculo entra aqui: o cache dele precisa cair junto com a
     // escrita, senão a revogação vira "até 30 s".
+    expect(problematicos).toEqual([]);
+  });
+
+  it("quem grava o metadata da pessoa (updateUser) invalida o usuário", async () => {
+    const { readdirSync, statSync } = await import("node:fs");
+    // O `getUser` vai para o cache curto chaveado pelo cookie: a sessão que grava
+    // ganha cookie novo, as OUTRAS sessões da pessoa não — sem a invalidação, o
+    // idioma e o nome trocados ficam até 30 s velhos nelas.
+    const ESCREVE_METADATA = /\.updateUser(ById)?\(/;
+    // Senha não está no snapshot (nem no `user_metadata`).
+    const FORA = new Set(["app/actions/auth/updatePassword.ts"]);
+    const vistos: string[] = [];
+    const problematicos: string[] = [];
+    const percorrer = (dir: string) => {
+      for (const entrada of readdirSync(dir)) {
+        const caminho = path.join(dir, entrada);
+        if (statSync(caminho).isDirectory()) {
+          percorrer(caminho);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entrada) || entrada.includes(".test.")) continue;
+        const fonte = readFileSync(caminho, "utf8");
+        if (!ESCREVE_METADATA.test(fonte)) continue;
+        const relativo = path.relative(RAIZ, caminho);
+        vistos.push(relativo);
+        if (FORA.has(relativo)) continue;
+        if (!fonte.includes("@/lib/auth/cache-curto") || !/invalidarUsuario\(/.test(fonte)) {
+          problematicos.push(relativo);
+        }
+      }
+    };
+    percorrer(path.join(RAIZ, "app"));
+    percorrer(path.join(RAIZ, "lib"));
+
+    // Controle: a sonda enxerga quem troca o idioma (senão o vazio não prova nada).
+    expect(vistos).toEqual(expect.arrayContaining(["app/actions/settings/trocarIdioma.ts"]));
     expect(problematicos).toEqual([]);
   });
 
