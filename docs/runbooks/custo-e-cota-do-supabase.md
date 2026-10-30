@@ -194,8 +194,9 @@ de 8 s do papel `authenticator`. Naquela instalação, a Nano entrou em swap, es
 consulta passou do teto: o cache se perdeu e o PostgREST ficou em laço. **Não está medido** se a Nano falha assim
 em toda instalação: o plano grátis continua sendo o caminho documentado de instalação.
 
-**Se acontecer com você:** *Restart project* devolve o serviço. Se voltar a cair parado, suba o compute para
-**Micro (1 GB)**; foi o que tirou a instalação medida do laço. Antes de trocar, confirme que é este ramo e não o
+**Se acontecer com você:** *Restart project* devolve o serviço. Se voltar a cair parado, subir o compute para
+**Micro (1 GB)** é o próximo passo a testar: dá o dobro de memória à introspecção. **Não está medido que resolva:**
+na instalação medida (29/10), quem devolveu o serviço foi o *Restart project*. Antes de trocar, confirme que é este ramo e não o
 replay do gateway: `postgrest-replay-do-gateway.md` (seção "Outro ramo: falta de memória/IO") e
 `supabase-compute-insuficiente-free.md`.
 

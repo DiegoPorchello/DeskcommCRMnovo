@@ -94,6 +94,12 @@ PostgREST tenta de novo, a introspecção estoura de novo — e fica nesse laço
    order by timestamp desc limit 20
    ```
 
+   **Zero linhas não descarta este ramo.** Esta sonda não foi medida contra um projeto no laço: no `postgres_logs`,
+   o texto da consulta pode vir em outro campo (o `metadata`), e não na linha
+   `canceling statement due to statement timeout`. Se der zero, rode de novo casando só
+   `regexp_contains(event_message, 'statement timeout')` e abra o `metadata` das linhas na janela da queda para ver
+   qual consulta foi cancelada.
+
 2. **O hook do replay está mesmo registrado?** Se está, este NÃO é o ramo do replay:
 
    ```bash
