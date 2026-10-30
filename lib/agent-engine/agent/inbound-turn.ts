@@ -204,6 +204,7 @@ import {
   runBeforeSend,
   tipoDeEnvio,
   type GateContext,
+  VETOS_IRREVOGAVEIS,
 } from '../guardrails/before-send';
 // #3333 — o predicado único do efeito, do lado de quem PERGUNTA. Do lado de quem RESPONDE é
 // a ponte das tools MCP (`lib/ai/runtime/tools.ts`), que recebe este mesmo coletor.
@@ -232,7 +233,7 @@ import {
   type BriefingDaPassagem,
 } from '@/lib/escalacao/briefing-da-passagem';
 import { diffCheckpoint } from '@/lib/leads/checkpoint-diff';
-import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from './turno-mudo';
+import { CORRECAO_DO_TURNO_MUDO, PASSOS_DA_CORRECAO, turnoMudoPedeCorrecao } from './turno-mudo';
 import {
   desfechoSemCandidato,
   previaPedeCorrecaoDoTurnoMudo,
@@ -2252,6 +2253,7 @@ async function executarTurnoDoAgente(
   // horas por dia em que um PR reprova por causa do relógio de parede.
   const clock = deps.clock ?? ((): Date => new Date());
   const inicioDoProcessamento = performance.now();
+  let duracaoDosClassificadoresMs = 0;
   const contextKnobs = {
     historyLimit: deps.knobs.historyLimit,
     maxTokens: deps.knobs.maxContextTokens,
@@ -3310,6 +3312,9 @@ async function executarTurnoDoAgente(
   // equipe. Os dois dizem que o silêncio foi decisão — só sem eles o motor pede a
   // correção do turno que terminou sem falar com o cliente (ver depois da chamada principal).
   let tentativasDeEnvio = 0;
+  // Veto que manda PARAR (stop/LGPD): pedir a correção seria pedir ao modelo que
+  // tente de novo o que a cadeia proíbe — ver `VETOS_IRREVOGAVEIS`.
+  let vetoIrrevogavel = false;
   let passouParaAEquipe = false;
   // Teto de mensagens físicas por turno (F2-15b) — `seq` JÁ é a contagem certa: ele só
   // avança quando o envio de fato sai pro canal (send_message + send_template, bolhas
@@ -3753,6 +3758,7 @@ async function executarTurnoDoAgente(
           return passarComercialParaEquipe(chain.code);
         }
         if (chain.status === 'vetoed') {
+          if (VETOS_IRREVOGAVEIS.has(chain.code)) vetoIrrevogavel = true;
           return { ok: false, error: { code: chain.code, message: chain.message } };
         }
         const outcome = chain.outcome;
@@ -4379,6 +4385,7 @@ async function executarTurnoDoAgente(
             ) {
               pacingCapVeto = { code: chain.code, nextAllowedAt: chain.nextAllowedAt };
             }
+            if (VETOS_IRREVOGAVEIS.has(chain.code)) vetoIrrevogavel = true;
             // Erro de ENSINO pt-br (mesmo shape de get_lead_context/breaker): o
             // modelo o vê no turno seguinte. NÃO é exceção — não derruba o run.
             return { ok: false, error: { code: chain.code, message: chain.message } };
@@ -5203,6 +5210,7 @@ async function executarTurnoDoAgente(
       manipulacaoLigada,
       ultimaMensagemDoCliente: skillSignal,
     });
+    const inicioDosClassificadores = performance.now();
     const [stageResultado, jailbreakVerdict, manipulacaoDoJev] = await Promise.all([
       deps.knobs.stageClassifier !== undefined && vaiClassificar.estagio
         ? classifyStage(
@@ -5245,6 +5253,7 @@ async function executarTurnoDoAgente(
       await gravarOJev(await perguntaAoJev, null, 'none');
       throw err;
     });
+    duracaoDosClassificadoresMs = Math.round(performance.now() - inicioDosClassificadores);
 
     stageSuggestion = stageResultado;
     if (stageSuggestion !== null) {
@@ -5512,7 +5521,7 @@ async function executarTurnoDoAgente(
     // revelar. Só com texto solto: silêncio sem texto é decisão já tomada, e
     // pedir de novo pagaria uma chamada de modelo para ouvir a mesma coisa.
     let correcaoTruncou = false;
-    // A correção também pode gastar o teto dela (3 passos) só em consultas: na
+    // A correção também pode gastar o teto dela (PASSOS_DA_CORRECAO) só em consultas: na
     // prévia isso é a mesma falha do teto da primeira chamada, não decisão.
     let tetoNaCorrecao = false;
     const correcaoDoTurnoMudoPedida =
@@ -5526,6 +5535,7 @@ async function executarTurnoDoAgente(
           liveJob().kind === 'inbound_turn' &&
           turnoMudoPedeCorrecao({
             tentativasDeEnvio,
+            vetoIrrevogavel,
             enviadas: outcomes.length,
             turnoDescartado,
             passouParaAEquipe,
@@ -5551,7 +5561,9 @@ async function executarTurnoDoAgente(
           system,
           messages: [...openingMessages, ...turn.result.responseMessages, pedidoDeCorrecao],
           tools,
-          maxSteps: Math.min(maxSteps, 3),
+          // Teto em `PASSOS_DA_CORRECAO` (turno-mudo.ts) — o MESMO número mede
+          // `tetoNaCorrecao` logo abaixo; dois literais já divergiram (6 aqui, 3 lá).
+          maxSteps: Math.min(maxSteps, PASSOS_DA_CORRECAO),
           ...(agentConfig !== null
             ? {
                 model: agentConfig.model,
@@ -5569,7 +5581,7 @@ async function executarTurnoDoAgente(
       correcaoTruncou = correcao.result.finishReason === 'length';
       tetoNaCorrecao = tetoDePassosAtingido({
         passosUsados: correcao.result.steps?.length ?? 0,
-        maxSteps: Math.min(maxSteps, 3),
+        maxSteps: Math.min(maxSteps, PASSOS_DA_CORRECAO),
         finishReason: correcao.result.finishReason,
       });
       mensagensDoTurno = [...mensagensDoTurno, pedidoDeCorrecao, ...correcao.result.responseMessages];
@@ -6201,6 +6213,8 @@ async function executarTurnoDoAgente(
       kind: liveJob().kind,
       messages_sent: outcomes.length,
       model: turn.model,
+      duracao_do_turno_ms: Math.round(performance.now() - inicioDoProcessamento),
+      classificadores_ms: duracaoDosClassificadoresMs,
     });
   } finally {
     // Turno que terminou sem enviar (veto, handoff, erro) também para de renovar.
