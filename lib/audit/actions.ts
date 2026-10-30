@@ -1370,6 +1370,13 @@ export const AUDIT_ACTIONS = [
   // cala a cobrança da organização inteira, e "quem desligou, e quando" só tem
   // resposta na trilha — a coluna guarda só o valor de agora.
   "ai.lembrete_de_caso_configurado",
+  // Setores de atendimento (migration 0801): cadastro e vínculo atendente →
+  // setor, feitos por manager+ na Equipe › Setores. O vínculo não guarda
+  // histórico — "quem estava no setor que foi apagado" só a trilha responde.
+  "attendant.sector_created",
+  "attendant.sector_updated",
+  "attendant.sector_deleted",
+  "attendant.sector_assigned",
   // Materiais do acervo (criar, enviar arquivo, editar, arquivar, reindexar).
   // O metadata leva só ids e contagens: o texto do material nunca entra — a
   // tabela é append-only e a cascata de LGPD não a alcança. Criar e enviar
