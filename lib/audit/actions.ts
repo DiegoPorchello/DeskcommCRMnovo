@@ -433,6 +433,14 @@ export const AUDIT_ACTIONS = [
   // linha de lugar" — o conteúdo não foi tocado nenhuma vez (é o que a issue
   // pede: preservar os cadastros).
   "template.reordered",
+  // GRUPOS de respostas rápidas (#3245): criar/renomear/reordenar/apagar um
+  // grupo não é `template.updated` — o ato muda a ESTRUTURA da equipe (as
+  // etapas que todos veem), não o texto de uma resposta. O audit responde
+  // "quem reorganizou nossa lista?", que é outra pergunta.
+  "template_group.created",
+  "template_group.updated",
+  "template_group.deleted",
+  "template_group.reordered",
   "auth.signup_requested",
   "auth.signup_failed",
   "auth.signup_confirmed",
