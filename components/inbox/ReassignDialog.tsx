@@ -26,6 +26,7 @@ import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useContinuarPorOutroNumero } from "@/hooks/inbox/useContinuarPorOutroNumero";
 import { useNumeroDaTransferencia } from "@/hooks/inbox/useNumeroDaTransferencia";
 import { useTransferConversation } from "@/hooks/inbox/useTransferConversation";
+import { nomeDoCanal } from "@/lib/channels/estado";
 import { outrosNumerosDoContato } from "@/lib/inbox/outros-numeros";
 import { rotuloDoAtendente } from "@/lib/users/rotulo-do-atendente";
 
@@ -207,7 +208,7 @@ export function ReassignDialog({
               <p className="text-xs text-muted-foreground" role="status" data-testid="aviso-numero-da-transferencia">
                 {t("A conversa vai continuar pelo número de {nome} ({numero}).")
                   .replace("{nome}", rotuloDoAtendente(destino.full_name, t))
-                  .replace("{numero}", numeroNovo.phone_number ?? numeroNovo.display_name ?? "—")}
+                  .replace("{numero}", numeroNovo.phone_number?.trim() || nomeDoCanal(numeroNovo, t))}
               </p>
             )}
           </div>
