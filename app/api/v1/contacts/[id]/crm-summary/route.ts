@@ -34,6 +34,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
+import { ALVO_DE_CONTATO, VINCULO_DE_CONTATO } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { motivosDoFunil } from "@/lib/leads/motivos-de-perda-do-funil";
@@ -142,21 +143,21 @@ export async function GET(
   // `crm_lead_links` com `target_kind='contact'`, `link_kind='related'`). Nesse
   // caso o negócio tem `contact_id` do contato PRINCIPAL, e a leitura por
   // `contact_id` devolveria vazio. Consultamos os vínculos antes e, se o
-  // contato não tiver negócio próprio (a precedência da 1a: próprio vence),
-  // trazemos os negócios em que ele aparece como relacionado.
-  const { data: vinculosRelacionados } = await supabase
+  // contato não tiver negócio próprio ABERTO (a precedência da 1a: próprio
+  // aberto vence), trazemos os negócios em que ele aparece como relacionado.
+  const { data: vinculosRelacionados, error: vinculosErr } = await supabase
     .from("crm_lead_links")
     .select("lead_id")
     .eq("organization_id", contactScope.organization_id)
-    .eq("target_kind", "contact")
-    .eq("link_kind", "related")
+    .eq("target_kind", ALVO_DE_CONTATO)
+    .eq("link_kind", VINCULO_DE_CONTATO)
     .eq("target_id", contactId);
   const idsRelacionados = (vinculosRelacionados ?? [])
     .map((v: { lead_id?: string }) => v.lead_id)
     .filter((v): v is string => typeof v === "string" && v.length > 0);
 
-  // Próprio primeiro: se o contato tem negócio próprio, ele vence o relacionado
-  // (mesma regra de `lib/leads/active-lead.ts`, não se reescreve aqui).
+  // Próprio ABERTO primeiro: se o contato tem negócio próprio aberto, ele vence
+  // o relacionado (mesma regra de `lib/leads/active-lead.ts`).
   const { data: leadsProprios, error: leadsPropriosErr } = await supabase
     .from("crm_leads")
     .select(LEAD_COLS)
@@ -167,9 +168,13 @@ export async function GET(
   // Sem `if` vazio: a falha desta leitura entra na varredura de `falha` abaixo,
   // junto das outras, para o painel ver um veredito só.
 
-  let leadsResolvidos = leadsProprios ?? [];
-  if (leadsResolvidos.length === 0 && idsRelacionados.length > 0) {
-    const { data: leadsRel } = await supabase
+  // Próprio só FECHADO não vence: o cartão "(2º número)" duplicado que alguém
+  // fechou depois de juntar esconderia o negócio vivo do cliente.
+  const proprios = leadsProprios ?? [];
+  let leadsResolvidos = proprios;
+  let leadsRelErr: { message: string } | null = null;
+  if (idsRelacionados.length > 0 && !proprios.some((l) => l.status === "open")) {
+    const { data: leadsRel, error } = await supabase
       .from("crm_leads")
       .select(LEAD_COLS)
       .eq("organization_id", contactScope.organization_id)
@@ -177,7 +182,13 @@ export async function GET(
       .in("id", idsRelacionados)
       .order("updated_at", { ascending: false })
       .limit(3);
-    leadsResolvidos = leadsRel ?? [];
+    leadsRelErr = error;
+    const rel = leadsRel ?? [];
+    leadsResolvidos = [
+      ...rel.filter((l) => l.status === "open"),
+      ...proprios,
+      ...rel.filter((l) => l.status !== "open"),
+    ].slice(0, 3);
   }
 
   const [orders, activities, demandas, fatos, historico] = await Promise.all([
@@ -221,7 +232,9 @@ export async function GET(
   // some no typecheck e o runtime continua vendo o erro. `.find` mantém a mesma
   // semântica (o primeiro erro vence) sem depender do tipo declarado.
   const falha = [
+    vinculosErr,
     leadsPropriosErr,
+    leadsRelErr,
     orders.error,
     activities.error,
     demandas.error,
@@ -244,7 +257,7 @@ export async function GET(
   return ok(
     {
       ...enrichment,
-      leads: (leadsResolvidos ?? []).map((row) => comCamposDoFunil(row as Record<string, unknown>)),
+      leads: leadsResolvidos.map((row) => comCamposDoFunil(row as Record<string, unknown>)),
       orders: orders.data ?? [],
       activities: linhas.map((a) => ({
         ...a,
