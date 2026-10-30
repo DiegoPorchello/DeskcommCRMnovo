@@ -129,3 +129,36 @@ describe("GET /api/v1/health — indisponibilidade do projeto Supabase", () => {
     expect(data.checks.supabase.reason).toBe("tempo_esgotado");
   });
 });
+
+describe("GET /api/v1/health — corpo cortado no meio não vira timeout", () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  function corpoCortado() {
+    return new ReadableStream({
+      start(c) {
+        c.error(Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }));
+      },
+    });
+  }
+
+  async function checkComResposta(res: () => Response) {
+    vi.stubGlobal("fetch", () => Promise.resolve(res()));
+    const { GET } = await import("./route");
+    const { NextRequest } = await import("next/server");
+    const { data } = await (await GET(new NextRequest("https://crm.exemplo.com.br/api/v1/health"))).json();
+    return data.checks.supabase;
+  }
+
+  it("200 com o corpo cortado mantém o motivo de alcance da conexão", async () => {
+    const supabase = await checkComResposta(() => new Response(corpoCortado(), { status: 200 }));
+    expect(supabase.status).toBe("down");
+    expect(supabase.reason).toBe("host_inalcancavel");
+  });
+
+  it("500 com o corpo cortado continua sendo a resposta que chegou", async () => {
+    const supabase = await checkComResposta(() => new Response(corpoCortado(), { status: 500 }));
+    expect(supabase.status).toBe("down");
+    expect(supabase.reason).toBe("resposta_inesperada");
+  });
+});

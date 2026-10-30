@@ -181,19 +181,23 @@ psql "$SUPABASE_DB_URL" -c \
     where relname in ('job_queue','api_audit_log','send_ledger','before_send_traces');"
 ```
 
-## 5. Compute mínimo: a Nano (free) não é opção para este schema
+## 5. Quando o compute Nano do plano grátis não basta
 
-O plano free é uma **avaliação**, não um ambiente de operação. Com 213 tabelas, 584 funções, 684 policies, 759
-índices e 222 triggers, a introspecção do schema cache do PostgREST leva ~722 ms com o banco saudável — e o
-`statement_timeout` do papel `authenticator` é de 8 s. Na Nano (0,5 GB), o projeto entra em swap, esgota o *Disk IO
-Budget* e essa consulta passa do teto: o cache se perde, toda requisição vira `PGRST002` e o serviço fica fora por
-horas, sem ninguém usando (medido: ~6 h, voltou só com *Restart project*).
+O sintoma não é lentidão, é indisponibilidade: o projeto fica fora do ar **sem ninguém usando**, toda chamada a
+`/rest/v1` responde `522` ou `503 PGRST002`, e o `/api/v1/health` diz `supabase: down` com
+`reason: projeto_indisponivel`.
 
-**Recomendação:** **Micro (1 GB) no mínimo** para teste, **Small (2 GB) ou acima** para operação. Abaixo disso, o
-sintoma não é lentidão — é indisponibilidade.
+**O que foi medido, e em quantas instalações.** Uma instalação, em 29/10, no compute Nano (0,5 GB): ~6 h fora do ar,
+que só voltou com *Restart project*. O schema tinha 213 tabelas, 584 funções, 684 policies, 759 índices e 222
+triggers; a introspecção do schema cache do PostgREST leva ~722 ms com o banco saudável, contra o `statement_timeout`
+de 8 s do papel `authenticator`. Naquela instalação, a Nano entrou em swap, esgotou o *Disk IO Budget*, e essa
+consulta passou do teto: o cache se perdeu e o PostgREST ficou em laço. **Não está medido** se a Nano falha assim
+em toda instalação: o plano grátis continua sendo o caminho documentado de instalação.
 
-Diagnóstico completo e o outro ramo do `PGRST002`: `postgrest-replay-do-gateway.md` (seção "Outro ramo: falta de
-memória/IO") e `supabase-compute-insuficiente-free.md`.
+**Se acontecer com você:** *Restart project* devolve o serviço. Se voltar a cair parado, suba o compute para
+**Micro (1 GB)**; foi o que tirou a instalação medida do laço. Antes de trocar, confirme que é este ramo e não o
+replay do gateway: `postgrest-replay-do-gateway.md` (seção "Outro ramo: falta de memória/IO") e
+`supabase-compute-insuficiente-free.md`.
 
 ## 6. Se ainda não fechar
 

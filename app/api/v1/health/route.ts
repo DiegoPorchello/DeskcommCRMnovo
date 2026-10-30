@@ -193,14 +193,15 @@ async function checkSupabase(): Promise<Check> {
     // alcança a origem) ou corpo com PGRST002 / schema cache (PostgREST não
     // conseguiu carregar o cache de schema, típico de compute insuficiente no
     // free). Não confundir com PGRST205 (tabela ausente num projeto de pé).
-    let corpo = "";
-    try {
-      corpo = (await withTimeout(res.text())).trim();
-    } catch {
-      // corpo que nunca chega = serviço que não respondeu: propaga para o catch
-      // externo, que classifica como tempo_esgotado (comportamento anterior).
-      throw new Error("timeout after body");
-    }
+    //
+    // A falha ao LER o corpo tem dois destinos. No `200` o corpo é a prova
+    // (`corpoDoPostgrest`): a falha propaga crua para o `catch`, que dá o
+    // motivo de alcance dela — timeout é `tempo_esgotado`, conexão cortada no
+    // meio continua sendo conexão cortada. Fora do `200` o status já chegou e o
+    // corpo só refina o motivo: uma leitura que falha não pode rebatizar a
+    // resposta, e ela cai no ramo `http_${status}`, como antes de o corpo ser lido.
+    const leitura = withTimeout(res.text());
+    const corpo = (res.status === 200 ? await leitura : await leitura.catch(() => "")).trim();
     const projetoIndisponivel =
       res.status === 522 ||
       /PGRST002/i.test(corpo) ||

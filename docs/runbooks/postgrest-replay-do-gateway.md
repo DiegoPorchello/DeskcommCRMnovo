@@ -81,20 +81,30 @@ Medido numa instalação em Supabase **free, compute Nano (0,5 GB)** em 29/10: 1
 (213 tabelas, 584 funções, 684 policies, 759 índices, 222 triggers). Sem cache, toda requisição vira `PGRST002`, o
 PostgREST tenta de novo, a introspecção estoura de novo — e fica nesse laço por horas.
 
-**Diagnóstico (cada linha é comando, não afirmação):**
+**Diagnóstico (cada passo é um comando ou um caminho exato no painel, não uma afirmação):**
 
-```bash
-# 1. A introspecção estourou o teto? (o sinal mais direto deste ramo)
-psql "$SUPABASE_DB_URL" -Atc "select count(*) from postgres_logs
-  where event_message ilike '%base types of domains%' and event_message ilike '%statement timeout%'"
-# 2. O hook do replay está mesmo registrado? (se sim, este NÃO é o ramo do replay)
-psql "$SUPABASE_DB_URL" -Atc "select rolconfig from pg_roles where rolname='authenticator'"
-# 3. O disco está no limite? (painel: Infrastructure → Disk IO Budget)
-```
+1. **A introspecção estourou o teto?** É o sinal mais direto deste ramo, e ele **não** se lê pelo `psql`:
+   `postgres_logs` é uma fonte do *Logs Explorer* do painel, não uma tabela do banco (pelo `psql` dá
+   `relation "postgres_logs" does not exist`). No painel: **Logs → Logs Explorer**, e rode:
+
+   ```sql
+   select timestamp, event_message from postgres_logs
+   where regexp_contains(event_message, 'base types of domains')
+     and regexp_contains(event_message, 'statement timeout')
+   order by timestamp desc limit 20
+   ```
+
+2. **O hook do replay está mesmo registrado?** Se está, este NÃO é o ramo do replay:
+
+   ```bash
+   psql "$SUPABASE_DB_URL" -Atc "select rolconfig from pg_roles where rolname='authenticator'"
+   ```
+
+3. **O disco está no limite?** No painel: **Project Settings → Infrastructure → Disk IO Budget**.
 
 **Conserto:** *Restart project* no painel do Supabase (é o único caminho que devolve o cache sem esperar a janela de
-IO). Depois, **sair da Nano**: ver `supabase-compute-insuficiente-free.md` para o compute mínimo e o que medir antes de
-escolher. Reiniciar sem trocar o compute devolve o serviço e ele volta a cair.
+IO). Se o projeto voltar a cair parado, o compute é o gargalo: ver `supabase-compute-insuficiente-free.md` para o que
+medir antes de subir da Nano.
 
 ## Follow-up (não feito aqui)
 

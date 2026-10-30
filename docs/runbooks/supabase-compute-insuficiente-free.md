@@ -93,9 +93,10 @@ projeto já cresceu além disso, o compute mínimo suportado não é o do free.
    Restart project). É o destravamento imediato medido em produção.
 2. Depois de voltar, monitore CPU/memória. Se saturar de novo sem carga, o
    compute do plano free (Nano, 0,5 GB) é insuficiente para o volume.
-3. **Compute mínimo suportado**: saia do free para um compute maior (pelo menos
-   Micro/Small no painel de compute do Supabase). O plano free é adequado para
-   protótipo; para produção com o DeskcommCRM, compute maior é necessário.
+3. **Se voltar a cair parado**, suba o compute para **Micro (1 GB)** no painel
+   de compute do Supabase: foi o que tirou do laço a única instalação medida
+   (29/10). Não está medido que a Nano falhe assim em toda instalação; o plano
+   grátis continua sendo o caminho documentado de instalação.
 4. Se o projeto estava pausado por inatividade (free pausa após 1 semana), use
    **Restore project** em vez de Restart.
 
