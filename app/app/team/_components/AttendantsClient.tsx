@@ -151,6 +151,21 @@ function SectorCell({
  * o roteamento aceitando a qualquer hora — é dito por extenso no diálogo, onde
  * há espaço para as duas metades.
  */
+/**
+ * O fuso ao lado do resumo da jornada, só quando ele difere do da organização.
+ * A janela é avaliada no fuso de CADA pessoa (`schedule.timezone`), e quem lê a
+ * tabela pensa no da organização: "seg 08:00–18:00" de quem está em outro fuso
+ * é outro instante. Igual ao da organização, o sufixo seria ruído.
+ */
+export function fusoNoResumo(
+  windows: ScheduleWindow[],
+  fusoDaPessoa: string | undefined,
+  fusoDaOrganizacao: string | undefined,
+): string {
+  if (windows.length === 0 || !fusoDaPessoa || fusoDaPessoa === fusoDaOrganizacao) return "";
+  return ` (${fusoDaPessoa})`;
+}
+
 function summarizeSchedule(windows: ScheduleWindow[], t: (texto: string) => string): string {
   if (windows.length === 0) return t("Não publicado");
   return windows.map((w) => `${t(DOW_LABELS[w.dow] ?? "")} ${w.start}–${w.end}`).join(", ");
@@ -772,7 +787,10 @@ export function AttendantsClient({ canManage, organizationTimezone }: Props) {
                       className={`text-sm text-muted-foreground max-md:flex max-md:basis-full max-md:items-center max-md:p-0 ${ROTULO_NO_CELULAR}`}
                     >
                       <div className="flex items-center gap-2">
-                        <span>{summarizeSchedule(windows, t)}</span>
+                        <span>
+                          {summarizeSchedule(windows, t)}
+                          {fusoNoResumo(windows, a.availability?.schedule?.timezone, organizationTimezone)}
+                        </span>
                         {canManage ? (
                           <Button
                             variant="ghost"

@@ -59,22 +59,20 @@ const ctx = { params: Promise.resolve({ user_id: ATENDENTE }) };
 
 beforeEach(() => mockBanco());
 
-describe("PATCH /api/v1/attendants/availability/[user_id] — a jornada é do gerente", () => {
-  it("o próprio atendente NÃO publica a própria jornada (senão bastava publicar 24 h)", async () => {
+// A regra da jornada é a de antes dos setores: a própria pessoa OU o gerente
+// (decisão do dono em 27/10/2026, no #3485). Este arquivo guarda as três
+// pontas para que uma restrição "só o gerente" não volte calada.
+const OUTRO = "44444444-4444-4444-8444-444444444444";
+const ctxOutro = { params: Promise.resolve({ user_id: OUTRO }) };
+
+describe("PATCH /api/v1/attendants/availability/[user_id] — quem grava a jornada", () => {
+  it("o próprio atendente publica a própria jornada", async () => {
     como(ATENDENTE, "agent");
     const { PATCH } = await import("./route");
     const res = await PATCH(patch({ schedule: JORNADA_24H }), ctx);
-    expect(res.status).toBe(403);
-    expect((await res.json()).error.code).toBe("forbidden_role");
-    expect(gravado).toBeNull();
-  });
-
-  it("o próprio atendente continua ligando a chave de plantão", async () => {
-    como(ATENDENTE, "agent");
-    const { PATCH } = await import("./route");
-    const res = await PATCH(patch({ is_available: true }), ctx);
     expect(res.status).toBe(200);
-    expect(gravado).toMatchObject({ organization_id: ORG, user_id: ATENDENTE, is_available: true });
+    expect(gravado).toMatchObject({ organization_id: ORG, user_id: ATENDENTE });
+    expect((gravado?.schedule as { windows: unknown[] }).windows).toHaveLength(7);
   });
 
   it("o gerente publica a jornada do atendente", async () => {
@@ -83,6 +81,13 @@ describe("PATCH /api/v1/attendants/availability/[user_id] — a jornada é do ge
     const res = await PATCH(patch({ schedule: JORNADA_24H }), ctx);
     expect(res.status).toBe(200);
     expect(gravado).toMatchObject({ organization_id: ORG, user_id: ATENDENTE });
-    expect((gravado?.schedule as { windows: unknown[] }).windows).toHaveLength(7);
+  });
+
+  it("um atendente não publica a jornada de OUTRO atendente", async () => {
+    como(ATENDENTE, "agent");
+    const { PATCH } = await import("./route");
+    const res = await PATCH(patch({ schedule: JORNADA_24H }), ctxOutro);
+    expect(res.status).toBe(403);
+    expect(gravado).toBeNull();
   });
 });

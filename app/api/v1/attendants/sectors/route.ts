@@ -20,6 +20,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { ROLE_RANK, type Role } from "@/lib/auth/types";
 import { sectorCreateSchema, validateRequest } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -35,9 +36,11 @@ export async function GET(_req: NextRequest): Promise<Response> {
   if (!authz.ok) return authz.response;
   const orgId = authz.org.orgId;
 
-  // O contador conta só filiação ATIVA (`revoked_at is null`), para coincidir
-  // com a aba Atendimento depois de uma revogação: revogar não apaga o vínculo
-  // (só apagar a filiação apaga, pela FK). A RLS de user_organizations mostra a
+  // O contador usa a MESMA régua do roster da aba Atendimento
+  // (`carregarRosterDeAtendimento`): filiação ATIVA (`revoked_at is null`) e
+  // papel agent+. Revogar ou rebaixar a viewer não apaga o vínculo (só apagar a
+  // filiação apaga, pela FK), e sem as duas condições o setor contaria quem a
+  // aba Atendimento já não mostra. A RLS de user_organizations mostra a
   // manager/viewer só a própria linha, então a filiação ativa é lida pelo admin
   // client, com a org de fonte confiável (activeOrg do cookie) filtrada à mão.
   const supabase = await createClient();
@@ -47,14 +50,18 @@ export async function GET(_req: NextRequest): Promise<Response> {
       .eq("organization_id", orgId).order("name", { ascending: true }),
     admin.from("attendant_sector_members").select("sector_id, user_id")
       .eq("organization_id", orgId),
-    admin.from("user_organizations").select("user_id")
+    admin.from("user_organizations").select("user_id, role")
       .eq("organization_id", orgId).is("revoked_at", null),
   ]);
   if (sectors.error) return fail("internal_error", sectors.error.message, 500, { requestId });
   if (members.error) return fail("internal_error", members.error.message, 500, { requestId });
   if (active.error) return fail("internal_error", active.error.message, 500, { requestId });
 
-  const activeUserIds = new Set((active.data ?? []).map((a) => a.user_id));
+  const activeUserIds = new Set(
+    ((active.data ?? []) as Array<{ user_id: string; role: Role }>)
+      .filter((a) => ROLE_RANK[a.role] >= ROLE_RANK.agent)
+      .map((a) => a.user_id),
+  );
   const countBySector = new Map<string, number>();
   for (const m of members.data ?? []) {
     if (!activeUserIds.has(m.user_id)) continue;

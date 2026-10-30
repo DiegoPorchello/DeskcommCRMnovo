@@ -18397,7 +18397,6 @@ export const DICIONARIO: Traducoes = {
   "Setor do atendente atualizado.": { es: "Sector del asesor actualizado." },
   "Já existe um setor com este nome.": { es: "Ya existe un sector con este nombre." },
   "Setor não encontrado.": { es: "Sector no encontrado." },
-  "Só gerentes e administradores definem o horário de atendimento.": { es: "Solo gerentes y administradores definen el horario de atención." },
   'Para não depender do dado, ponha um texto de reserva: {{primeiro_nome|"aluno"}}.': {
     es: 'Para no depender del dato, pon un texto de respaldo: {{primeiro_nome|"alumno"}}.',
   },

@@ -13,6 +13,7 @@ vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async (
 const ORG = "11111111-1111-4111-8111-111111111111";
 const ATIVO = "22222222-2222-4222-8222-222222222222";
 const REVOGADO = "33333333-3333-4333-8333-333333333333";
+const REBAIXADO = "55555555-5555-4555-8555-555555555555";
 const SETOR = "44444444-4444-4444-8444-444444444444";
 
 type Chamada = { tabela: string; filtros: Array<[string, unknown]> };
@@ -49,7 +50,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/v1/attendants/sectors", () => {
-  it("member_count conta só filiação ativa: o atendente revogado não entra", async () => {
+  it("member_count usa a régua da aba Atendimento: revogado e viewer não entram", async () => {
     const chamadas: Chamada[] = [];
     vi.mocked(createClient).mockResolvedValue(
       mockClient({ attendant_sectors: [{ id: SETOR, name: "Suporte", description: null }] }, chamadas),
@@ -60,9 +61,14 @@ describe("GET /api/v1/attendants/sectors", () => {
           attendant_sector_members: [
             { sector_id: SETOR, user_id: ATIVO },
             { sector_id: SETOR, user_id: REVOGADO },
+            { sector_id: SETOR, user_id: REBAIXADO },
           ],
           // A consulta filtra `revoked_at is null`: o revogado não volta daqui.
-          user_organizations: [{ user_id: ATIVO }],
+          // O rebaixado a viewer volta, e é o papel que o tira da conta.
+          user_organizations: [
+            { user_id: ATIVO, role: "agent" },
+            { user_id: REBAIXADO, role: "viewer" },
+          ],
         },
         chamadas,
       ),
