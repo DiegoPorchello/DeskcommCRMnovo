@@ -351,4 +351,44 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
     // escrita, senão a revogação vira "até 30 s".
     expect(problematicos).toEqual([]);
   });
+
+  it("quem suspende ou reativa a empresa por RPC invalida a org (cobrança inclusive)", async () => {
+    const { readdirSync, statSync } = await import("node:fs");
+    // O `org_status` do snapshot é o que o requireRole e a tela de suspensa
+    // leem. A cobrança suspende e reativa pelas mesmas funções do admin; sem
+    // `invalidarOrg`, quem pagou fica até 30 s preso na tela de suspensa.
+    const MUDA_ESTADO_DA_ORG = /\.rpc\(\s*"fn_(reativar_organizacao|suspender_organizacao|cobranca_suspender_se_devendo)"/;
+    const vistos: string[] = [];
+    const problematicos: string[] = [];
+    const percorrer = (dir: string) => {
+      for (const entrada of readdirSync(dir)) {
+        const caminho = path.join(dir, entrada);
+        if (statSync(caminho).isDirectory()) {
+          percorrer(caminho);
+          continue;
+        }
+        if (!entrada.endsWith(".ts") || entrada.includes(".test.")) continue;
+        const fonte = readFileSync(caminho, "utf8");
+        if (!MUDA_ESTADO_DA_ORG.test(fonte)) continue;
+        vistos.push(path.relative(RAIZ, caminho));
+        if (!fonte.includes("@/lib/auth/cache-curto") || !/invalidarOrg\(/.test(fonte)) {
+          problematicos.push(path.relative(RAIZ, caminho));
+        }
+      }
+    };
+    percorrer(path.join(RAIZ, "app"));
+    percorrer(path.join(RAIZ, "lib"));
+
+    // Controle: a sonda enxerga os quatro caminhos conhecidos (senão o vazio
+    // abaixo não prova nada).
+    expect(vistos).toEqual(
+      expect.arrayContaining([
+        "app/api/v1/admin/tenants/[id]/reactivate/route.ts",
+        "app/api/v1/admin/tenants/[id]/suspend/route.ts",
+        "lib/cobranca/dono.ts",
+        "lib/cobranca/sincronizar.ts",
+      ]),
+    );
+    expect(problematicos).toEqual([]);
+  });
 });
