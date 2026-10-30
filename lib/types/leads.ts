@@ -143,8 +143,6 @@ export interface Lead {
    * já validados — só http/https.
    */
   contact_phone?: string;
-  /** Telefones adicionais (contatos relacionados) do cliente deste negócio. */
-  contact_phones?: string[];
   contact_email?: string;
   contact_links?: Array<{ tipo: string; href: string }>;
   /**
