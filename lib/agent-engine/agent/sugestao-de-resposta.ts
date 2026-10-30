@@ -238,6 +238,7 @@ export function motivoDoVeto(codigo: string | null | undefined): MotivoDaFalha |
     case "registro_afirmado_sem_efeito":
       return {
         codigo,
+        causa: "dizia que o interesse do cliente foi registrado, mas nada foi gravado neste turno",
         acionavel: true,
         texto:
           "A resposta dizia que o interesse do cliente foi registrado, mas a ferramenta de registro não gravou nada neste turno. Nada foi enviado — ligue a criação de negócio no agente ou gere de novo com o registro de fato.",
