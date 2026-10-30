@@ -1545,7 +1545,16 @@ async function handleOutboundFromUserPhone(
   // de eco não o reconhece como nosso — sem este corte, o próprio aviso que
   // acabou de sair voltaria pelo webhook, viraria conversa com o número do
   // plantão e ainda chamaria `pausarIaPorAtendimentoManual` no fim.
-  if (!grupo && (await ehNumeroInternoDeAviso(admin, session.organization_id, parsed))) {
+  // ⚠️ `identidadeDoRemetente` e NÃO `parsed`: em modo privacidade o chat chega
+  // como `@lid` e `parseChatId` devolve `phone: null` — o número que a
+  // organização cadastrou em `config_aviso_de_caso.telefone_destino` só aparece
+  // em `_data.key.remoteJidAlt`. Com `parsed` cru o corte só casava pelo
+  // `destino_jid`, que é gravado DEPOIS do envio (`registraJidDoAviso`): o
+  // primeiro aviso de uma instalação em modo privacidade voltava como contato e
+  // conversa com o número do plantão. É a MESMA identidade que o ramo de
+  // entrada já passa (`handleInbound`) — os dois lados do aviso perguntam a
+  // mesma coisa e precisam perguntar do mesmo jeito.
+  if (!grupo && (await ehNumeroInternoDeAviso(admin, session.organization_id, identidadeDoRemetente(p, parsed)))) {
     await registrarMensagemIgnorada(admin, session.organization_id, {
       direction: "outbound",
       sessionId: session.id,
