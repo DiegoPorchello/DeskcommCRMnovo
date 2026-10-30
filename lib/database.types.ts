@@ -2622,9 +2622,67 @@ export type Database = {
           },
         ];
       };
+      automation_rule_contact_claims: {
+        Row: {
+          contact_id: string;
+          created_at: string;
+          event_id: string | null;
+          id: string;
+          organization_id: string;
+          rule_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          contact_id: string;
+          created_at?: string;
+          event_id?: string | null;
+          id?: string;
+          organization_id: string;
+          rule_id: string;
+        };
+        Update: {
+          contact_id?: string;
+          created_at?: string;
+          event_id?: string | null;
+          id?: string;
+          organization_id?: string;
+          rule_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_rule_contact_claims_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_rule_contact_claims_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "event_log";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_rule_contact_claims_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_rule_contact_claims_rule_id_fkey";
+            columns: ["rule_id"];
+            isOneToOne: false;
+            referencedRelation: "automation_rules";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automation_rule_runs: {
         Row: {
           actions_result: NonNullable<Json>;
+          contact_id: string | null;
           created_at: string;
           error: string | null;
           event_id: string | null;
@@ -2636,6 +2694,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           actions_result?: NonNullable<Json>;
+          contact_id?: string | null;
           created_at?: string;
           error?: string | null;
           event_id?: string | null;
@@ -2646,6 +2705,7 @@ export type Database = {
         };
         Update: {
           actions_result?: NonNullable<Json>;
+          contact_id?: string | null;
           created_at?: string;
           error?: string | null;
           event_id?: string | null;
@@ -2655,6 +2715,13 @@ export type Database = {
           status?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "automation_rule_runs_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "automation_rule_runs_event_id_fkey";
             columns: ["event_id"];
@@ -15679,6 +15746,10 @@ export type Database = {
           p_tags: string[];
           p_title: string;
         };
+        Returns: string;
+      };
+      fn_numero_da_transferencia: {
+        Args: { p_conversation_id: string; p_organization_id: string; p_to_user_id: string };
         Returns: string;
       };
       fn_org_operante: { Args: { p_org: string }; Returns: boolean };
