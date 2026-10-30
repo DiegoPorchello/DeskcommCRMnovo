@@ -915,6 +915,10 @@ export const AUDIT_ACTIONS = [
   // "Cliente pela agenda" ligada ou desligada (migration 0262). Ligar reescreve
   // etiquetas de toda a organização; metadata leva as contagens.
   "crm.cliente_pela_agenda_alterado",
+  // #3644 — "quem já comprou volta pelo funil de clientes" ligada/desligada, e a
+  // janela de pós-venda junto. Muda em que funil nasce o negócio de quem já é
+  // cliente, e se ele nasce: é decisão de configuração, não operação de tela.
+  "crm.cliente_pela_venda_alterado",
   // A lista de etiquetas de contato INTERNO (#2353) mudou. Decisão de
   // configuração da organização que muda o que vira card no funil e o que a IA
   // responde: "desde quando a equipe parou de virar lead?" só tem resposta aqui.
@@ -1313,6 +1317,10 @@ export const AUDIT_ACTIONS = [
   // interruptores, a antecedência e o opt-in de WhatsApp). O número NÃO entra:
   // é dado de contato, e o audit é trilha legível por quem administra.
   "user.task_reminder_prefs_updated",
+  // A pessoa gravou a própria lateral do Inbox (#3008): quais módulos aparecem
+  // e em que ordem. O metadata traz a ordem e os escondidos — é o que responde
+  // "por que a tela desta pessoa é diferente" sem arrastar nome nem telefone.
+  "user.inbox_modules_updated",
   // "Sincronizar agenda do celular" (#2736): o gesto de IMPORTAR em bloco a
   // agenda do aparelho pareado — mesmo porquê do `contacts.imported` de planilha
   // ("quem trouxe esta base, e quando"), agora com o número de qual conexão veio.
@@ -1363,6 +1371,14 @@ export const AUDIT_ACTIONS = [
   "ai.knowledge_source_updated",
   "ai.knowledge_source_archived",
   "ai.knowledge_source_reindexed",
+  "ai_models.synced",
+  "ai_models.sync_failed",
+  // "Não são a mesma empresa" (Spec 31, PR A): o par de fichas sugerido pelo nome
+  // saiu da lista para a organização toda. A trilha guarda só os dois ids — nunca
+  // nome nem telefone —, porque a pergunta que se faz depois é "quem tirou esta
+  // sugestão, e quando". A fila guarda o usuário, mas a trilha é o rastro que a
+  // organização consulta, e só ela tem o mesmo formato das outras ações de contato.
+  "contact.duplicate_dismissed",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
