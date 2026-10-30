@@ -357,6 +357,8 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
     // O `org_status` do snapshot é o que o requireRole e a tela de suspensa
     // leem. A cobrança suspende e reativa pelas mesmas funções do admin; sem
     // `invalidarOrg`, quem pagou fica até 30 s preso na tela de suspensa.
+    // Esta cerca prova que a chamada EXISTE, não que alcança o app: pelo
+    // webhook do provedor a régua roda no worker, e lá o teto é o TTL.
     const MUDA_ESTADO_DA_ORG = /\.rpc\(\s*"fn_(reativar_organizacao|suspender_organizacao|cobranca_suspender_se_devendo)"/;
     const vistos: string[] = [];
     const problematicos: string[] = [];

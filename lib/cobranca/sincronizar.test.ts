@@ -235,7 +235,7 @@ describe("sincronizar", () => {
     expect(filtros(fechou!)).toEqual([["eq", "organization_id", ORG], ["eq", "kind", "cobranca"], ["is", "ref_kind", null], ["eq", "status", "open"]]);
     expect(rpcs("fn_reativar_organizacao")[0]?.args).toEqual({ p_org: ORG, p_kind_exigido: "cobranca", p_ator: null });
     expect(acoes()).toEqual(["cobranca.estado_mudou", "cobranca.org_reativada"]);
-    // O snapshot de autorização em cache cai junto: quem pagou não espera 30 s na tela de suspensa.
+    // O snapshot de autorização em cache cai junto — no processo onde a régua roda.
     expect(h.invalidarOrg).toHaveBeenCalledWith(ORG);
   });
 

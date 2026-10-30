@@ -424,8 +424,11 @@ export async function aplicarRegua(
         p_ator: null,
       });
       if (error) throw new Error(`cobranca: reativação falhou (${error.code ?? "sem_codigo"})`);
-      // O estado da empresa mora no snapshot de autorização em cache (30 s):
-      // sem isto, quem acabou de pagar segue preso na tela de suspensa.
+      // O estado da empresa mora no snapshot de autorização em cache (30 s), que
+      // é memória do PROCESSO (`lib/auth/cache-curto.ts`). Isto só vale na hora
+      // quando a régua roda no app: "Já paguei", cancelar, cron/cobranca,
+      // admin/cobranca/conexao. Pelo webhook do provedor ela roda no worker
+      // (`sinal.handler` via event_log), e lá o teto do app segue sendo o TTL.
       invalidarOrg(orgId);
       if (!mudou(data)) return "nada";
       auditar("cobranca.org_reativada", orgId, { motivo: "pagamento_confirmado" });
