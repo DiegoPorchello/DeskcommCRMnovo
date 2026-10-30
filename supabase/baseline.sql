@@ -50722,13 +50722,15 @@ begin
           from public.conversations c
          where c.organization_id = p_org
            and c.contact_id = p_contact
-           -- Doc 237, escolha 3-B: a conversa que a IA está atendendo
-           -- (`ai_handling`) fica com a IA. Passá-la aqui a deixaria "assumida" e
-           -- a IA calada sem prazo — um efeito que ninguém pediu ao trocar a
-           -- carteira. Quando a IA passar a conversa para humano, o dono da
-           -- carteira já é o vendedor novo.
-           and c.status in ('open', 'pending', 'claimed')
+           and c.status in ('open', 'pending', 'claimed', 'ai_handling')
            and (c.assigned_to_user_id is null or c.assigned_to_user_id = v_anterior)
+           -- Doc 237, escolha 3-B: a conversa que a IA está atendendo fica com a
+           -- IA. Quem diz isso é `comando_da_conversa` (a mesma regra da tela e
+           -- do motor), não o status: a IA atende conversa `open` sem dono, e
+           -- `ai_handling` quase não é escrito. Passá-la aqui a deixaria
+           -- "assumida" e a IA calada sem prazo. Quando a IA passar a conversa
+           -- para humano, o dono da carteira já é o vendedor novo.
+           and public.comando_da_conversa(c) <> 'automatico'
          order by c.id
       loop
         perform public.fn_conversation_assign(p_org, v_conversa, p_dono, 'transfer');

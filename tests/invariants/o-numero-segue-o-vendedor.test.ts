@@ -28,7 +28,9 @@
  * 6. A troca de CARTEIRA (`fn_definir_carteira_do_cliente`) leva as conversas
  *    abertas do dono anterior ao novo dono, pela mesma porta — e o número junto.
  * 7. A carteira NÃO rouba conversa que já é de outra pessoa.
- * 8. A carteira NÃO tira da IA a conversa que ela está atendendo (doc 237, 3-B).
+ * 8. A carteira NÃO tira da IA a conversa que ela está atendendo (doc 237, 3-B)
+ *    — a `open` sem dono, que é o caso comum, e a rara `ai_handling`. A parada
+ *    (IA silenciada) vai para o dono novo: o filtro é o comando, não o status.
  * 9. A prévia do diálogo (`fn_numero_da_transferencia`) diz o número que a troca
  *    grava, e só `service_role` a executa.
  *
@@ -64,6 +66,8 @@ const CONTATO_DO_NUMERO_GERAL = "ffffffff-4444-4000-8000-000000000004";
 const CONTATO_DO_OUTRO_CANAL = "ffffffff-4444-4000-8000-000000000005";
 const CONTATO_DA_IA = "ffffffff-4444-4000-8000-000000000006";
 const CONTATO_DA_PREVIA = "ffffffff-4444-4000-8000-000000000007";
+const CONTATO_DA_IA_ABERTA = "ffffffff-4444-4000-8000-000000000008";
+const CONTATO_PARADO = "ffffffff-4444-4000-8000-000000000009";
 
 /** Chama a RPC como a rota chama: `service_role`. */
 function transfere(conversa: string, para: string | null, motivo = "transfer"): void {
@@ -179,7 +183,9 @@ describe("#3642 — a conversa segue o número do vendedor novo", () => {
         ('${CONTATO_DO_NUMERO_GERAL}', '${ORG}', 'Contato Numero Geral'),
         ('${CONTATO_DO_OUTRO_CANAL}', '${ORG}', 'Contato Outro Canal'),
         ('${CONTATO_DA_IA}', '${ORG}', 'Contato Da IA'),
-        ('${CONTATO_DA_PREVIA}', '${ORG}', 'Contato Da Previa')
+        ('${CONTATO_DA_PREVIA}', '${ORG}', 'Contato Da Previa'),
+        ('${CONTATO_DA_IA_ABERTA}', '${ORG}', 'Contato Da IA Aberta'),
+        ('${CONTATO_PARADO}', '${ORG}', 'Contato Parado')
       on conflict (id) do update
         set carteira_user_id = null, carteira_origem = null, carteira_definida_em = null;
     `);
@@ -317,6 +323,45 @@ describe("#3642 — a conversa segue o número do vendedor novo", () => {
     expect(
       lastLine(sql(`select carteira_user_id::text from public.contacts where id = '${CONTATO_DA_IA}';`)),
     ).toBe(VENDEDOR_B);
+  });
+
+  it("doc 237, 3-B, caso comum: a conversa `open` sem dono que a IA atende fica com a IA", () => {
+    // É assim que a IA atende em produção: `ai_handling` quase não é escrito, e
+    // o motor responde conversa `open` sem dono. Filtrar por status deixava esta
+    // conversa ir para B, `claimed`, com a IA calada sem prazo.
+    const conversa = conversaNova(
+      "ffffffff-5555-4000-8000-000000000012", CONTATO_DA_IA_ABERTA, SESSAO_A, null, "open");
+    sql(`update public.contacts
+            set carteira_user_id = '${VENDEDOR_A}', carteira_origem = 'manual', carteira_definida_em = now()
+          where id = '${CONTATO_DA_IA_ABERTA}';`);
+    expect(
+      lastLine(sql(`select public.comando_da_conversa(c) from public.conversations c where id = '${conversa}';`)),
+    ).toBe("automatico");
+
+    defineCarteira(CONTATO_DA_IA_ABERTA, VENDEDOR_B);
+
+    expect(donoDe(conversa)).toBe("NULL");
+    expect(sessaoDe(conversa)).toBe(SESSAO_A);
+    expect(
+      lastLine(sql(`select status from public.conversations where id = '${conversa}';`)),
+    ).toBe("open");
+    expect(
+      lastLine(sql(`select carteira_user_id::text from public.contacts where id = '${CONTATO_DA_IA_ABERTA}';`)),
+    ).toBe(VENDEDOR_B);
+  });
+
+  it("doc 237, 3-B, controle: a conversa `open` sem dono PARADA (IA silenciada) vai para o dono novo", () => {
+    const conversa = conversaNova(
+      "ffffffff-5555-4000-8000-000000000013", CONTATO_PARADO, SESSAO_A, null, "open");
+    sql(`update public.conversations set bot_silenced_until = now() + interval '1 day' where id = '${conversa}';
+         update public.contacts
+            set carteira_user_id = '${VENDEDOR_A}', carteira_origem = 'manual', carteira_definida_em = now()
+          where id = '${CONTATO_PARADO}';`);
+
+    defineCarteira(CONTATO_PARADO, VENDEDOR_B);
+
+    expect(donoDe(conversa)).toBe(VENDEDOR_B);
+    expect(sessaoDe(conversa)).toBe(SESSAO_B);
   });
 
   it("a prévia do diálogo diz o número que a troca grava — e só service_role a executa", () => {
