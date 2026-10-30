@@ -311,6 +311,11 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
     "app/actions/settings/trocarIdioma.ts",
     "app/actions/settings/updateProfile.ts",
     "app/api/v1/admin/tenants/[id]/members/[userId]/email/route.ts",
+    // Entradas: o vínculo gravado FORA do app (seed, worker, SQL) não invalida
+    // ninguém, e entrar de novo tem de mostrar o estado atual na hora.
+    "app/actions/auth/signInWithPassword.ts",
+    "app/auth/callback/route.ts",
+    "app/auth/confirm/route.ts",
   ];
 
   it.each(ESCRITAS_DE_AUTORIZACAO)("%s invalida o cache curto", (relativo) => {
