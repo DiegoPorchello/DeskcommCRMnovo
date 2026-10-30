@@ -1095,7 +1095,7 @@ const remarcarShape = {
     .uuid()
     .describe(
       "o compromisso, vindo de `crm_list_appointments` sem `dia` para esta conversa — " +
-        "com `dia` a lista volta vazia e o compromisso não aparece.",
+        "um `dia` chutado devolve lista vazia e o compromisso não aparece.",
     ),
   new_starts_at: z.string().datetime({ offset: true }).describe("o novo início, vindo de `crm_find_free_slots`"),
   notes: z.string().max(2000).optional(),

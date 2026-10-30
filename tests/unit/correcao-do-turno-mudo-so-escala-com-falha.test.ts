@@ -37,6 +37,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { PASSOS_DA_CORRECAO } from "@/lib/agent-engine/agent/turno-mudo";
+
 const ler = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const turno = ler("lib/agent-engine/agent/inbound-turn.ts");
 
@@ -93,7 +95,11 @@ describe("recuperação limitada do turno mudo (preservada)", () => {
     // crm_list_appointments → slot → crm_reschedule_appointment → send_message);
     // com teto 3 ela é aritmeticamente impossível. O limite CONTINUA existindo
     // (correção é UMA e limitada) — só é folgado o bastante para a receita caber.
-    expect(bloco).toContain("Math.min(maxSteps, 6)");
+    expect(PASSOS_DA_CORRECAO).toBe(6);
+    // O MESMO teto roda a correção E mede se ela bateu nele (`tetoNaCorrecao`):
+    // com dois literais, a régua ficou em 3 enquanto a correção rodava com 6.
+    expect(bloco.split("Math.min(maxSteps, PASSOS_DA_CORRECAO)").length - 1).toBe(2);
+    expect(bloco).not.toMatch(/Math\.min\(maxSteps, \d+\)/);
     // O pedido de correção é a instrução canônica do motor.
     expect(bloco).toContain("CORRECAO_DO_TURNO_MUDO");
     // Nenhum desfecho terminal dentro da correção — decisão é separada.

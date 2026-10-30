@@ -370,6 +370,21 @@ export interface Gate {
  */
 export type MotivoDoStop = 'contato_bloqueado' | 'contato_interno' | 'atendimento_com_humano';
 
+/**
+ * Os códigos de veto que mandam PARAR, não reescrever: o gate `stop` (regra dura nº 2) e o
+ * `lgpd`. Reescrever o texto não muda o veredito deles, e o `reason` de cada um diz "encerre o
+ * turno sem tentar de novo". Quem decide se vale pedir outra tentativa ao modelo (a correção do
+ * turno mudo, `turno-mudo.ts`) consulta esta lista — e não a da cadeia inteira, porque os vetos
+ * de ENSINO (agenda_stall, promessa…) são exatamente os que uma nova tentativa conserta.
+ */
+export const VETOS_IRREVOGAVEIS: ReadonlySet<string> = new Set<MotivoDoStop | 'lgpd_anonymized' | 'lgpd_missing_legal_basis'>([
+  'contato_bloqueado',
+  'contato_interno',
+  'atendimento_com_humano',
+  'lgpd_anonymized',
+  'lgpd_missing_legal_basis',
+]);
+
 /** Gate 1 — STOP/opt-out/força-humano: veto IRREVOGÁVEL (regra dura nº 2), 1ª linha. */
 const stopGate: Gate = {
   name: 'stop',

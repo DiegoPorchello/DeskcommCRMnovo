@@ -357,6 +357,33 @@ describe("o turno de resposta que terminou sem mensagem ao cliente", () => {
     ).toContain(MARCA_DA_CORRECAO);
   });
 
+  it("⭐ veto irrevogável (opt-out) + texto solto: NÃO pede correção nem chamada extra de modelo", async () => {
+    // O contraponto do caso acima: o cliente pediu para sair (is_blocked=true) e o
+    // gate `stop` vetou com "encerre o turno sem tentar de novo". Pedir a correção
+    // aqui mandaria o modelo chamar send_message de novo, contra o veto, e pagaria
+    // uma chamada de modelo (até PASSOS_DA_CORRECAO passos, com as ferramentas de
+    // escrita) por toda mensagem de opt-out.
+    await pool.query(`update contacts set is_blocked = true where organization_id = $1 and id = $2`, [
+      ORG,
+      CONTACT,
+    ]);
+    const { fake, prompts } = modelo([
+      enviar("Ok, você foi removido da nossa lista."),
+      texto("(o envio foi vetado; encerro)"),
+      // sem 3ª resposta roteirizada: a 3ª chamada é o fechamento (JSON padrão do
+      // dublê); se a correção fosse pedida, ela consumiria esse lugar.
+    ]);
+    await turno(fake);
+
+    expect(enviados, "mensagem saiu para um contato que pediu para sair").toEqual([]);
+    expect(
+      prompts.some((p) => p.includes(MARCA_DA_CORRECAO)),
+      "veto irrevogável pediu a correção do turno mudo — o motor mandou tentar de novo o que o stop proíbe",
+    ).toBe(false);
+    // turno (2 chamadas: envio vetado + encerramento) + fechamento = 3, sem correção.
+    expect(prompts).toHaveLength(3);
+  });
+
   it("⭐ silêncio deliberado NÃO abre caso humano (#2938)", async () => {
     // Mantenedor: o modelo escolheu não responder (autorizado pela correção) —
     // isso é resposta, não defeito. Antes disto o caso abria à toa.

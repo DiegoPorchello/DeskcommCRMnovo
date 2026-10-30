@@ -13,7 +13,9 @@
  * - o turno foi DESCARTADO como obsoleto (o cliente escreveu de novo; o turno
  *   da mensagem nova responde a tudo);
  * - a conversa foi passada à equipe (o aviso da escalação é do sistema);
- * - o cap de envio do número barrou (o turno é reagendado mais abaixo).
+ * - o cap de envio do número barrou (o turno é reagendado mais abaixo);
+ * - a cadeia vetou com um código que manda PARAR (opt-out, contato interno,
+ *   conversa com a equipe, LGPD): reescrever não muda o veredito.
  *
  * ⚠️ Tentativa de envio que levou VETO não é razão legítima — e já foi. A
  * regra antiga exigia `tentativasDeEnvio === 0` com o argumento "o veto já
@@ -50,8 +52,17 @@ export const CORRECAO_DO_TURNO_MUDO =
   'compromisso — e MOVA o mesmo compromisso com crm_reschedule_appointment. Nunca use ' +
   'crm_book_appointment nem crm_find_and_book_appointment para remarcar: eles criam um SEGUNDO ' +
   'compromisso e deixam o antigo no lugar. Só depois de a agenda ter mudado de fato (a resposta ' +
-  ' trouxe "remarcado: true"), mande a confirmação por send_message com o resultado real; se a ' +
+  'trouxe "remarcado: true"), mande a confirmação por send_message com o resultado real; se a ' +
   'agenda não mudou, avise por send_message em vez de confirmar.';
+
+/**
+ * Teto de passos da correção. Folgado, não arbitrário: com 3 a correção do teste 10
+ * (2026-10-26, job 5ca40cb3) gastou os três em ferramentas de agenda e parou antes do
+ * send_message (`messages_sent: 0`). A receita de remarcar são 4 saídas de modelo
+ * (localizar → slot → mover → enviar); 6 deixa folga sem deixar de ser limite — a
+ * correção continua UMA chamada. Quem mede se a correção bateu no teto usa o MESMO número.
+ */
+export const PASSOS_DA_CORRECAO = 6;
 
 export function turnoMudoPedeCorrecao(t: {
   /**
@@ -60,6 +71,12 @@ export function turnoMudoPedeCorrecao(t: {
    * "VETO não é razão legítima" no cabeçalho deste arquivo).
    */
   tentativasDeEnvio: number;
+  /**
+   * A cadeia vetou um envio com um código que manda PARAR (stop/LGPD —
+   * `VETOS_IRREVOGAVEIS`). Diferente do veto de ensino, aqui a correção pediria
+   * ao modelo que tentasse de novo o que o veto proíbe: o silêncio é a decisão.
+   */
+  vetoIrrevogavel: boolean;
   enviadas: number;
   turnoDescartado: boolean;
   passouParaAEquipe: boolean;
@@ -67,6 +84,7 @@ export function turnoMudoPedeCorrecao(t: {
 }): boolean {
   return (
     t.enviadas === 0 &&
+    !t.vetoIrrevogavel &&
     !t.turnoDescartado &&
     !t.passouParaAEquipe &&
     !t.capDeEnvio
