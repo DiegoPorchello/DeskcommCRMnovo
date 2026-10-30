@@ -43,6 +43,9 @@ export const DICIONARIO: Traducoes = {
   "Com regras nesta lista, o telefone vinculado à conversa escolhe o agente antes da IA. Os demais números usam o fallback público. Intenções, campanhas e o agente anterior não mudam essa escolha.": { es: "Con reglas en esta lista, el teléfono vinculado a la conversación elige el agente antes de la IA. Los demás números usan el agente público de reserva. Las intenciones, campañas y el agente anterior no cambian esta elección." },
   "Telefone com DDI": { es: "Teléfono con código de país" },
   "Agente reservado": { es: "Agente reservado" },
+  "CEP": { es: "Código postal" },
+  "UF": { es: "Provincia" },
+  "Logradouro": { es: "Calle" },
   "Escolha um agente": { es: "Elija un agente" },
   "Remover regra de remetente": { es: "Eliminar regla de remitente" },
   "Adicionar número do remetente": { es: "Añadir número del remitente" },
@@ -127,6 +130,13 @@ export const DICIONARIO: Traducoes = {
   // `Sem atividade` é chave NOVA; `Funil não encontrado.`, que a rota usa no
   // 404, já existe no dicionário (bloco das rotas de fluxo) — não duplicar.
   "Sem atividade": { es: "Sin actividad" },
+  // Os filtros da barra na Lista (#3172, fatia 2): o que ainda não vale lá é
+  // DITO, não escondido. `{filtros}` é placeholder, preenchido com os nomes que
+  // a própria barra usa (já traduzidos).
+  "Na Lista, estes filtros ainda não valem: {filtros}. No Quadro eles funcionam.": {
+    es: "En la Lista, estos filtros todavía no se aplican: {filtros}. En el Tablero sí funcionan.",
+  },
+  "Nenhum negócio com este filtro.": { es: "Ningún negocio con este filtro." },
   "Há um ajuste proporcional esperando pagamento. Escolher outro plano cancela esse ajuste.": { es: "Hay un ajuste proporcional esperando el pago. Elegir otro plan cancela ese ajuste." },
   "Estamos preparando o ajuste proporcional. Aguarde alguns segundos e tente novamente.": { es: "Estamos preparando el ajuste proporcional. Espera unos segundos e inténtalo de nuevo." },
   "Estamos preparando o ajuste proporcional. Aguarde alguns segundos.": { es: "Estamos preparando el ajuste proporcional. Espera unos segundos." },
@@ -629,6 +639,12 @@ export const DICIONARIO: Traducoes = {
   },
   "Regra": { es: "Regla" },
   "Telefone": { es: "Teléfono" },
+  // Spec 31 (B1): os telefones da ficha. "Fixo", "Celular" e "Outro" já existem acima.
+  "Principal": { es: "Principal" },
+  "Tem WhatsApp": { es: "Tiene WhatsApp" },
+  "Sem WhatsApp": { es: "Sin WhatsApp" },
+  "WhatsApp: não sabemos": { es: "WhatsApp: no sabemos" },
+  "Veio da junção de fichas": { es: "Vino de la unión de fichas" },
   "Pontuação": { es: "Puntuación" },
   // #2642 — formulário da ação notify_team, depois do recorte: o destino é o
   // número de Avisos e não há mais escolha de pessoa nem de canal.
@@ -1739,6 +1755,8 @@ export const DICIONARIO: Traducoes = {
 
   // ─── Inbox: caixa bloqueada até assumir (#3012) ───
   "Assuma esta conversa para responder.": { es: "Asume esta conversación para responder." },
+  // ─── Inbox: arquivo arrastado para o compositor (#3708) ───
+  "Solte o arquivo para anexar": { es: "Suelta el archivo para adjuntarlo" },
   "Bloquear a caixa de mensagem até o atendente assumir a conversa": {
     es: "Bloquear el cuadro de mensaje hasta que el agente asuma la conversación",
   },
@@ -2421,6 +2439,14 @@ export const DICIONARIO: Traducoes = {
   // ─── Agentes de IA: seletor de modelo, capacidades, credencial, handoff ───
   Modelo: { es: "Modelo" },
   "Selecione um modelo": { es: "Selecciona un modelo" },
+  "Buscar modelo": { es: "Buscar modelo" },
+  "Nenhum modelo encontrado": { es: "Ningún modelo encontrado" },
+  "Preço por 1 milhão de tokens": { es: "Precio por 1 millón de tokens" },
+  "Preço não informado": { es: "Precio no informado" },
+  "Grátis": { es: "Gratis" },
+  "Este modelo é a variante de lote e não responde no chat. Escolha outro da lista.": {
+    es: "Este modelo es la variante por lotes y no responde en el chat. Elige otro de la lista.",
+  },
   "Digite o identificador do modelo": { es: "Escribe el identificador del modelo" },
   "Conecte a assinatura do ChatGPT em IA › Credenciais para listar os modelos.": {
     es: "Conecta la suscripción de ChatGPT en IA › Credenciales para listar los modelos.",
@@ -3011,6 +3037,14 @@ export const DICIONARIO: Traducoes = {
   "A IA escolhe a hora": { es: "La IA elige el momento" },
   "Como calcular a espera": { es: "Cómo calcular la espera" },
   "Duração (minutos)": { es: "Duración (minutos)" },
+  // Duração escolhida na marcação (#3709) — o campo do painel, com o valor do
+  // serviço como padrão.
+  "O padrão é a duração do serviço. Mude se este atendimento precisar de mais ou menos tempo.": {
+    es: "El valor por defecto es la duración del servicio. Cámbialo si esta atención necesita más o menos tiempo.",
+  },
+  "Escolha uma duração entre 5 e 1440 minutos.": {
+    es: "Elige una duración entre 5 y 1440 minutos.",
+  },
   "Mínimo (min)": { es: "Mínimo (min)" },
   "Máximo (min)": { es: "Máximo (min)" },
   "Orientação (opcional)": { es: "Orientación (opcional)" },
@@ -15058,6 +15092,15 @@ export const DICIONARIO: Traducoes = {
   "Pagante, passageiro…": { es: "Pagador, pasajero…" },
   "Participante adicionado.": { es: "Participante agregado." },
   "Participante removido.": { es: "Participante eliminado." },
+  // ─── #3669 F1: ligar ao negócio o número de outra pessoa do cliente ───
+  "+ telefone": { es: "+ teléfono" },
+  "Digite o telefone.": { es: "Escribe el teléfono." },
+  "Comprador, loja…": { es: "Comprador, tienda…" },
+  "Ligar ao negócio": { es: "Vincular al negocio" },
+  "Telefone ligado ao negócio.": { es: "Teléfono vinculado al negocio." },
+  "O contato que já tinha este número foi ligado ao negócio.": {
+    es: "El contacto que ya tenía este número fue vinculado al negocio.",
+  },
   "Este contato já é o contato principal do negócio.": {
     es: "Este contacto ya es el contacto principal del negocio.",
   },
