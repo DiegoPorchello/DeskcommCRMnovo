@@ -33,6 +33,8 @@ const estado = {
   papel: null as string | null,
   leiturasDeVinculo: 0,
   getUsers: 0,
+  suporte: null as unknown,
+  leiturasDeSuporte: 0,
 };
 
 function cookieDeSessao(): { name: string; value: string } {
@@ -106,8 +108,13 @@ vi.mock("@/lib/supabase/server", () => ({
     },
     rpc: async (fn: string) => {
       if (fn === "fn_user_role_in_org") return { data: estado.papel, error: null };
-      // Contexto de acompanhamento e prova de MFA: nada em curso nestes casos.
-      return { data: fn === "fn_support_context" ? null : true, error: null };
+      // Contexto de acompanhamento e prova de MFA: nada em curso, salvo o caso
+      // que semeia `estado.suporte`.
+      if (fn === "fn_support_context") {
+        estado.leiturasDeSuporte += 1;
+        return { data: estado.suporte, error: null };
+      }
+      return { data: true, error: null };
     },
   }),
 }));
@@ -131,6 +138,8 @@ beforeEach(() => {
   estado.papel = "admin";
   estado.leiturasDeVinculo = 0;
   estado.getUsers = 0;
+  estado.suporte = null;
+  estado.leiturasDeSuporte = 0;
 });
 
 afterEach(() => {
@@ -232,6 +241,49 @@ describe("REVOGAÇÃO — a próxima requisição tem de NEGAR", () => {
     // E, se ela faltar, o TTL ainda fecha a janela.
     esquecerTudo();
     expect((await requireRole("admin")).ok).toBe(false);
+  });
+});
+
+describe("a identidade alcança as OUTRAS sessões e o acompanhamento ativo não é guardado", () => {
+  it("invalidarUsuario derruba o getUser em cache de uma sessão cujo cookie a requisição não tem", async () => {
+    const outraSessao = { ...cookieDeSessao(), value: `${cookieDeSessao().value}x` };
+    cookieStore = [outraSessao];
+    await loadAuthUser();
+    await loadAuthUser();
+    expect(estado.getUsers).toBe(1);
+
+    // Sair de todos os aparelhos roda na sessão que clicou, com OUTRO cookie.
+    cookieStore = [cookieDeSessao()];
+    invalidarUsuario(USER_ID);
+
+    cookieStore = [outraSessao];
+    await loadAuthUser();
+    expect(estado.getUsers).toBe(2);
+  });
+
+  it("acompanhamento ATIVO é relido a cada requisição (vence pelo relógio, sem invalidação)", async () => {
+    estado.suporte = {
+      id: "33333333-3333-4333-8333-333333333333",
+      organization_id: ORG_ID,
+      actor_user_id: USER_ID,
+      auth_session_id: "44444444-4444-4444-8444-444444444444",
+      previous_organization_id: null,
+      expires_at: new Date(relogio.agora + 60_000).toISOString(),
+      name: "Acme",
+      locale: null,
+      access_mode: "full",
+      status: "active",
+    };
+    expect((await loadAuthUser())?.support?.status).toBe("active");
+    estado.suporte = { ...(estado.suporte as object), status: "expired" };
+    expect((await loadAuthUser())?.support?.status).toBe("expired");
+    expect(estado.leiturasDeSuporte).toBe(2);
+  });
+
+  it("controle: a AUSÊNCIA de acompanhamento continua no cache", async () => {
+    await loadAuthUser();
+    await loadAuthUser();
+    expect(estado.leiturasDeSuporte).toBe(1);
   });
 });
 

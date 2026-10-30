@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ user_id: 
   // que atualiza "ao vivo" (evento → `router.refresh`) pede o valor velho no
   // meio do UPDATE e o guarda de novo. A invalidação de baixo, depois do
   // commit, cobre o intervalo que sobra.
-  invalidarUsuario(targetUserId);
+  invalidarUsuario(user_id);
 
   const { data, error } = await db
     .from("user_organizations")

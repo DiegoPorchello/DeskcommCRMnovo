@@ -185,6 +185,10 @@ const sessaoDaRequisicao = cache(async () => {
       ? await comCacheCurto({
           chave: `sessao:${sessao.chave}`,
           etiquetas: [etiquetaDeSessao(sessao.chave)],
+          // A identidade também derruba a sessão: `invalidarUsuario` (sair de
+          // todos os aparelhos, MFA novo, revogação) alcança as OUTRAS sessões
+          // da pessoa, cujo cookie esta requisição não conhece.
+          etiquetasDoValor: (r) => (r.data?.user ? [etiquetaDeUsuario(r.data.user.id)] : []),
           ate: sessao.expiraEm,
           guardar: (r) => !r.error && !!r.data?.user,
           carregar: () => supabase.auth.getUser(),
@@ -368,6 +372,9 @@ const suporteDaSessao = cache(
     return comCacheCurto({
       chave: `suporte:${userId}:${sessao.chave}`,
       etiquetas: [etiquetaDeUsuario(userId), etiquetaDeSessao(sessao.chave)],
+      // Só a AUSÊNCIA, pela mesma regra do poder de plataforma: um acompanhamento
+      // ativo pode vencer pelo relógio ou cair por SQL, sem invalidação possível.
+      guardar: (contexto) => contexto === null,
       carregar: () => readSupportContext(supabase),
     });
   },
